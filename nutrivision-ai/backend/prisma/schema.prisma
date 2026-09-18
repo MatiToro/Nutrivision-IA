@@ -1,0 +1,182 @@
+// NutriVision AI — Modelo de datos
+// Motor: PostgreSQL | ORM: Prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// Usuario. La autenticación de credenciales la maneja Firebase Auth /
+// Google Identity Services: acá solo guardamos el perfil de negocio,
+// vinculado por firebaseUid (nunca guardamos contraseñas).
+// ------------------------------------------------------------------
+model User {
+  id          String   @id @default(uuid())
+  firebaseUid String   @unique
+  email       String   @unique
+  displayName String?
+  photoUrl    String?
+  provider    AuthProvider @default(EMAIL)
+
+  // Plan de suscripción. El plan Gratuito tiene un límite diario real
+  // de escaneos (ver FREE_DAILY_SCAN_LIMIT en meal.controller.js).
+  plan        Plan     @default(FREE)
+
+  // Datos biométricos / objetivo (Formulario y Objetivos)
+  weightKg      Float?
+  heightCm      Float?
+  age           Int?
+  sex           Sex?
+  activityLevel ActivityLevel?
+  goal          Goal?
+  dailyCalorieGoal Int?
+  dailyProteinGoalG Int?
+  dailyCarbsGoalG   Int?
+  dailyFatGoalG     Int?
+  onboardingCompleted Boolean @default(false)
+
+  meals       Meal[]
+  weightLogs  WeightLog[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([email])
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHT
+  MODERATE
+  ACTIVE
+  VERY_ACTIVE
+}
+
+enum Goal {
+  LOSE_WEIGHT
+  MAINTAIN
+  GAIN_MUSCLE
+  GAIN_WEIGHT
+  MODIFY_DIET
+}
+
+// ------------------------------------------------------------------
+// Comida escaneada / cargada. Un registro por plato analizado.
+// ------------------------------------------------------------------
+model Meal {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String?    // etiqueta que el usuario le pone al plato al guardarlo
+  imageUrl    String
+  source      MealSource @default(WEB_UPLOAD)
+  status      MealStatus @default(PROCESSING)
+
+  totalCalories Float?
+  totalProteinG Float?
+  totalCarbsG   Float?
+  totalFatG     Float?
+
+  aiRawResponse Json?     // respuesta cruda del modelo de visión, para auditoría/debug
+  coachFeedback CoachFeedback?
+
+  ingredients Ingredient[]
+
+  loggedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, loggedAt])
+}
+
+enum MealSource {
+  WEB_UPLOAD
+  MOBILE_CAMERA
+  MOBILE_GALLERY
+}
+
+enum MealStatus {
+  PROCESSING
+  ANALYZED
+  FAILED
+  EDITED
+}
+
+// Ingrediente detectado (o agregado/editado manualmente por el usuario)
+model Ingredient {
+  id          String   @id @default(uuid())
+  mealId      String
+  meal        Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  name        String
+  grams       Float
+  calories    Float
+  proteinG    Float
+  carbsG      Float
+  fatG        Float
+
+  source      IngredientSource @default(AI_DETECTED)
+  fatSecretFoodId String?      // referencia externa opcional (FatSecret Platform API)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum IngredientSource {
+  AI_DETECTED
+  MANUAL_ADDED
+  MANUAL_EDITED
+}
+
+// Devolución cualitativa del Coach IA para un plato puntual
+model CoachFeedback {
+  id          String   @id @default(uuid())
+  mealId      String   @unique
+  meal        Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  summary     String   @db.Text
+  tips        String[] // lista corta de consejos accionables
+  alignment   CoachAlignment @default(ON_TRACK)
+
+  createdAt   DateTime @default(now())
+}
+
+enum CoachAlignment {
+  ON_TRACK
+  NEEDS_ADJUSTMENT
+  OFF_TRACK
+}
+
+// Registro de peso para el historial / progreso
+model WeightLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  weightKg  Float
+  loggedAt  DateTime @default(now())
+
+  @@index([userId, loggedAt])
+}

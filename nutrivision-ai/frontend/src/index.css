@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* ==========================================================
+   NutriVision AI — Sistema de diseño (v2)
+   Paleta más vívida (verde franco + degradé), superficies frías
+   y neutras, tipografía sans en todo — inspirado en dashboards
+   tipo SaaS de salud/fitness.
+   ========================================================== */
+:root {
+  /* Color */
+  --color-bg: #F6F7F9;
+  --color-surface: #FFFFFF;
+  --color-ink: #17191C;
+  --color-ink-soft: #62666D;
+  --color-primary: #189B4E;
+  --color-primary-dark: #0E7A3A;
+  --color-primary-soft: #E4F5EA;
+  --gradient-primary: linear-gradient(135deg, #22B562 0%, #0E7A3A 100%);
+  --color-accent: #D9A02C;
+  --color-accent-soft: #FBF0D9;
+  --color-berry: #9C3A52;
+  --color-berry-soft: #F6E4E8;
+  --color-line: #E4E6EA;
+  --color-danger: #C0392B;
+  --color-success: #189B4E;
+
+  /* Identidad de color por macro — consistente en Dashboard, modales y Escáner */
+  --macro-protein: #3B82F6;
+  --macro-carbs: #EAB308;
+  --macro-fats: #E0554B;
+
+  /* Tipografía */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Layout */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --shadow-card: 0 1px 2px rgba(23, 25, 28, 0.04), 0 8px 24px rgba(23, 25, 28, 0.06);
+  --max-width: 1120px;
+  --sidebar-width: 250px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-body);
+  font-weight: 700;
+  margin: 0 0 0.5em 0;
+  letter-spacing: -0.015em;
+}
+
+p { margin: 0 0 1em 0; }
+a { color: var(--color-primary); }
+button, input, select, textarea { font-family: inherit; font-size: inherit; }
+
+:focus-visible { outline: 2.5px solid var(--color-accent); outline-offset: 2px; }
+
+.container { width: 100%; max-width: var(--max-width); margin: 0 auto; padding: 0 24px; }
+
+/* ---- App shell (sidebar + content) ---- */
+.app-shell { flex: 1; display: flex; min-height: 100vh; }
+.app-shell__content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: none; border-radius: var(--radius-md); padding: 12px 22px;
+  font-weight: 600; font-size: 0.95rem; cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-primary { background: var(--gradient-primary); color: #fff; }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.05); }
+.btn-accent { background: var(--color-accent); color: #2A1D06; }
+.btn-accent:hover:not(:disabled) { background: #c78f24; }
+.btn-ghost { background: transparent; color: var(--color-primary); border: 1.5px solid var(--color-line); }
+.btn-ghost:hover:not(:disabled) { border-color: var(--color-primary); }
+.btn-block { width: 100%; }
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.field label {
+  font-size: 0.82rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--color-ink-soft);
+}
+.field input, .field select {
+  border: 1.5px solid var(--color-line); border-radius: var(--radius-sm);
+  padding: 11px 14px; background: var(--color-surface); color: var(--color-ink);
+}
+.field input:focus, .field select:focus { border-color: var(--color-primary); }
+.field-error { color: var(--color-danger); font-size: 0.82rem; }
+
+.eyebrow {
+  font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--color-primary);
+}
+.helper-text { color: var(--color-ink-soft); font-size: 0.88rem; }
+.mono-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- Avatar utility (sidebar + profile) ---- */
+.avatar-circle {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--gradient-primary); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.82rem; flex-shrink: 0;
+}
+.avatar-circle--lg { width: 64px; height: 64px; font-size: 1.3rem; }
+
+/* ---- Modal overlay (day detail, confirmations) ---- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(23, 25, 28, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; z-index: 50;
+}
+.modal-panel {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  width: 100%;
+  max-width: 460px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

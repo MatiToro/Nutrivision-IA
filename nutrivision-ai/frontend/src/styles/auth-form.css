@@ -1,0 +1,196 @@
+/* ==========================================================
+   Formularios de autenticación (Login / Registro)
+   Estilo tomado del diseño de referencia: inputs con ícono y
+   solo placeholder, CTA verde sólido, y botones outline.
+   ========================================================== */
+
+.auth-form h2 {
+  margin: 0 0 4px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.auth-form__subtitle {
+  margin: 0 0 26px;
+  text-align: center;
+  color: var(--color-ink-soft);
+  font-size: 0.95rem;
+}
+
+.auth-form__input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.auth-form__input svg {
+  position: absolute;
+  left: 16px;
+  color: #9AA5A0;
+  pointer-events: none;
+}
+
+.auth-form__input input {
+  width: 100%;
+  padding: 15px 16px 15px 46px;
+  border: 1.5px solid #E3E8E6;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+}
+
+.auth-form__input input::placeholder { color: #9AA5A0; }
+.auth-form__input input:focus {
+  border-color: var(--color-primary);
+  outline: none;
+}
+
+.auth-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.auth-form__row .auth-form__input { margin-bottom: 12px; }
+
+.auth-form__forgot {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 18px;
+}
+
+.auth-form__forgot button {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.auth-form__forgot button:hover { text-decoration: underline; }
+
+.auth-form__submit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 15px;
+  border: none;
+  border-radius: 12px;
+  background: #1A8B4C;
+  color: #fff;
+  font-size: 0.97rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.auth-form__submit:hover:not(:disabled) { background: #14713D; }
+.auth-form__submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.auth-form__divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 22px 0;
+}
+.auth-form__divider::before,
+.auth-form__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #E3E8E6;
+}
+.auth-form__divider span {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #E3E8E6;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  color: var(--color-ink-soft);
+  flex-shrink: 0;
+}
+
+.auth-form__outline-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px;
+  border: 1.5px solid #D6DEDA;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--color-ink);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.auth-form__outline-btn:hover:not(:disabled) { background: #F7F9F8; }
+.auth-form__outline-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.auth-form__outline-btn--create {
+  margin-top: 12px;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.auth-form__outline-btn--create:hover { background: var(--color-primary-soft); }
+
+.auth-form__success {
+  margin: 0 0 14px;
+  font-size: 0.86rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.auth-form .field-error { margin: 0 0 14px; }
+
+.auth-form__terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 4px 0 18px;
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+  line-height: 1.5;
+}
+.auth-form__terms input { margin-top: 3px; flex-shrink: 0; }
+.auth-form__terms-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.auth-form__hint {
+  margin: -4px 0 14px;
+  font-size: 0.8rem;
+  color: var(--color-ink-soft);
+}
+
+.auth-form__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: none;
+  color: var(--color-ink-soft);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 18px;
+  width: 100%;
+  justify-content: center;
+}
+.auth-form__back:hover { color: var(--color-ink); }
