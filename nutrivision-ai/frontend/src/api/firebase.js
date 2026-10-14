@@ -1,7 +1,5 @@
-// Inicialización del SDK cliente de Firebase. Estas claves (a diferencia
-// de las del backend) SON públicas por diseño — Firebase las valida por
-// dominio autorizado, no son un secreto. Aun así, viven en variables de
-// entorno para no hardcodear config de un proyecto en el código fuente.
+// Inicialización del SDK cliente de Firebase. Estas claves son públicas 
+// Aun así, estan en variables de entorno.
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,

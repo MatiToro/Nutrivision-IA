@@ -2,9 +2,7 @@ import './NutritionLabelCard.css';
 
 /**
  * Elemento de firma visual del producto: el desglose de macros se lee
- * como una etiqueta nutricional real (bloque de "Calorías" grande,
- * regla gruesa, filas con línea fina, cifras en monoespaciada) — porque
- * eso es exactamente lo que la IA está reemplazando: leer la etiqueta.
+ * como una etiqueta nutricional real
  */
 export default function NutritionLabelCard({ totals, goal }) {
   const rows = [

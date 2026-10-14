@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, UserPlus } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import AuthLayout from '../components/AuthLayout';
 
@@ -8,9 +8,10 @@ export default function LoginPage() {
   const { login, loginWithGoogle, resetPassword } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = location.state?.from?.pathname || '/dashboard';
+  const redirectTo = location.state?.from?.pathname || '/';
 
   const [form, setForm] = useState({ email: '', password: '', rememberMe: true });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [resetSent, setResetSent] = useState(false);
@@ -79,10 +80,17 @@ export default function LoginPage() {
           <div className="auth-form__input">
             <Lock size={18} />
             <input
-              type="password" autoComplete="current-password" placeholder="Contraseña" required minLength={6}
+              type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Contraseña" required minLength={6}
               aria-label="Contraseña"
               value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
+            <button
+              type="button" className="auth-form__eye" onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
 
           <div className="auth-form__forgot">
@@ -92,11 +100,11 @@ export default function LoginPage() {
           </div>
 
           {resetSent && (
-            <p className="auth-form__success">
+            <p className="message message--success">
               Te enviamos un correo a {form.email} con instrucciones para restablecerla.
             </p>
           )}
-          {error && <p className="field-error" role="alert">{error}</p>}
+          {error && <p className="message" role="alert">{error}</p>}
 
           <button type="submit" className="auth-form__submit" disabled={submitting}>
             {submitting ? 'Ingresando…' : 'Iniciar sesión'} <ArrowRight size={18} />
@@ -109,18 +117,16 @@ export default function LoginPage() {
           <GoogleIcon /> Continuar con Google
         </button>
 
-        <button
-          type="button" className="auth-form__outline-btn auth-form__outline-btn--create"
-          onClick={() => navigate('/register')}
-        >
-          <UserPlus size={18} /> Crear cuenta
-        </button>
+        <p className="auth-form__footer">
+          ¿No tenés cuenta?{' '}
+          <button type="button" onClick={() => navigate('/register')}>Creá una</button>
+        </p>
       </div>
     </AuthLayout>
   );
 }
 
-// Logo de Google en SVG (lucide no incluye marcas comerciales)
+// Logo de Google en SVG
 export function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
