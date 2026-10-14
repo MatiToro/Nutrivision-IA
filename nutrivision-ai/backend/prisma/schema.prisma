@@ -31,6 +31,9 @@ model User {
   weightKg      Float?
   heightCm      Float?
   age           Int?
+  // Fecha de nacimiento (registro desde la app mobile). Si está cargada, la
+  // edad se calcula a partir de ella y se mantiene actualizada sola.
+  birthDate     DateTime? @db.Date
   sex           Sex?
   activityLevel ActivityLevel?
   goal          Goal?
@@ -40,13 +43,58 @@ model User {
   dailyFatGoalG     Int?
   onboardingCompleted Boolean @default(false)
 
+  // --- Módulo Nutricionistas ---
+  // Un rol por cuenta (para ser paciente y nutricionista se usan mails distintos).
+  role          Role     @default(USER)
+  // Cuenta suspendida por un Administrador: requireAuth responde 403.
+  banned        Boolean  @default(false)
+  // Premium obtenido con un código de nutricionista (30 días). El plan
+  // efectivo es Premium si plan = PREMIUM o premiumUntil > ahora.
+  premiumUntil  DateTime?
+  // Pro pago con Mercado Pago: vigente hasta esta fecha (null = sin vencimiento,
+  // ej. dado por un administrador). Al vencer, el plan vuelve a FREE.
+  planUntil      DateTime?
+  // La prueba gratis de 7 días de Pro se da una sola vez por cuenta.
+  proTrialUsedAt DateTime?
+  // Aviso único al paciente cuando su nutricionista le cambia las metas.
+  goalsNoticePending Boolean @default(false)
+  // Inicio de la etapa actual (alta de objetivos o último cambio de objetivo).
+  // El gráfico de progreso (RF20) solo muestra los días desde esta fecha.
+  goalStartedAt DateTime?
+
   meals       Meal[]
   weightLogs  WeightLog[]
+
+  nutritionistProfile NutritionistProfile? @relation("NutritionistUser")
+  reviewedNutritionists NutritionistProfile[] @relation("NutritionistReviewer")
+  patientLinks        PatientLink[]
+  reviews             Review[]
+  redeemedCodes       PremiumCode[]
+  goalChanges         GoalChangeLog[] @relation("GoalChangeTarget")
+  goalChangesMade     GoalChangeLog[] @relation("GoalChangeAuthor")
+
+  // Mi cocina (RF12, RF13)
+  fridgeItems   FridgeItem[]
+  shoppingItems ShoppingItem[]
+
+  // Recetas inteligentes (RF14, RF15)
+  savedRecipes       SavedRecipe[]
+  recipeSuggestions  RecipeSuggestion[]
+
+  // Suscripciones y pagos con Mercado Pago
+  subscriptions Subscription[]
+  payments      Payment[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([email])
+}
+
+enum Role {
+  USER
+  NUTRITIONIST
+  ADMIN
 }
 
 enum Plan {
@@ -115,6 +163,7 @@ enum MealSource {
   WEB_UPLOAD
   MOBILE_CAMERA
   MOBILE_GALLERY
+  RECIPE          // "Registrar como comida de hoy" desde una receta (no cuenta como escaneo)
 }
 
 enum MealStatus {
@@ -179,4 +228,298 @@ model WeightLog {
   loggedAt  DateTime @default(now())
 
   @@index([userId, loggedAt])
+}
+
+// ------------------------------------------------------------------
+// Módulo Nutricionistas (RF23–RF33)
+// ------------------------------------------------------------------
+
+// Perfil profesional (1:1 con un User de rol NUTRITIONIST). El nombre y la
+// foto son los del User; el promedio de estrellas se calcula desde Review.
+model NutritionistProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation("NutritionistUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  licenseNumber   String   // matrícula profesional
+  bio             String?  @db.Text
+  specialties     String[]
+  contactWhatsapp  String?
+  contactEmail     String?
+  contactInstagram String?
+  contactOther     String?
+
+  status          NutritionistStatus @default(PENDING)
+  rejectionReason String?
+  reviewedAt      DateTime?
+  reviewedById    String?
+  reviewedBy      User?    @relation("NutritionistReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  // Código que el nutricionista le pasa al paciente para vincularse (regenerable).
+  linkCode        String   @unique
+  // Suscripción mensual (simulada). Activa si subscriptionUntil > ahora.
+  subscriptionUntil DateTime?
+
+  links           PatientLink[]
+  reviews         Review[]
+  premiumCodes    PremiumCode[]
+  payments        NutritionistPayment[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+}
+
+enum NutritionistStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Vínculo paciente–nutricionista. Solo puede haber un ACTIVE por paciente
+// (índice único parcial creado por SQL en prisma/manual/).
+model PatientLink {
+  id             String   @id @default(uuid())
+  nutritionistId String
+  nutritionist   NutritionistProfile @relation(fields: [nutritionistId], references: [id], onDelete: Cascade)
+  patientId      String
+  patient        User     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  status         LinkStatus @default(ACTIVE)
+  endedAt        DateTime?
+  endedBy        LinkEndedBy?
+
+  createdAt      DateTime @default(now())
+
+  @@index([patientId, status])
+  @@index([nutritionistId, status])
+}
+
+enum LinkStatus {
+  ACTIVE
+  ENDED
+}
+
+enum LinkEndedBy {
+  PATIENT
+  NUTRITIONIST
+}
+
+// Valoración (1–5 estrellas + comentario). Una por paciente y nutricionista;
+// se mantiene y se puede editar aunque el paciente se desvincule.
+model Review {
+  id             String   @id @default(uuid())
+  nutritionistId String
+  nutritionist   NutritionistProfile @relation(fields: [nutritionistId], references: [id], onDelete: Cascade)
+  patientId      String
+  patient        User     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  stars          Int
+  comment        String?  @db.Text
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([nutritionistId, patientId])
+}
+
+// Código Premium: 5 por cada mes pagado, no acumulables (vencen con el mes).
+// Cada uno da 30 días de Premium al paciente que lo canjea.
+model PremiumCode {
+  id             String   @id @default(uuid())
+  code           String   @unique
+  nutritionistId String
+  nutritionist   NutritionistProfile @relation(fields: [nutritionistId], references: [id], onDelete: Cascade)
+  periodEnd      DateTime
+  redeemedById   String?
+  redeemedBy     User?    @relation(fields: [redeemedById], references: [id], onDelete: SetNull)
+  redeemedAt     DateTime?
+
+  createdAt      DateTime @default(now())
+
+  @@index([nutritionistId, periodEnd])
+}
+
+// Registro de quién cambió objetivos/metas de un usuario y qué cambió.
+model GoalChangeLog {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation("GoalChangeTarget", fields: [userId], references: [id], onDelete: Cascade)
+  changedById String?
+  changedBy   User?    @relation("GoalChangeAuthor", fields: [changedById], references: [id], onDelete: SetNull)
+  changes     Json
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Cada mes pagado del nutricionista (con sus 5 códigos Premium).
+model NutritionistPayment {
+  id             String   @id @default(uuid())
+  nutritionistId String
+  nutritionist   NutritionistProfile @relation(fields: [nutritionistId], references: [id], onDelete: Cascade)
+  periodStart    DateTime
+  periodEnd      DateTime
+  // Monto cobrado por Mercado Pago (null en los meses de prueba anteriores).
+  amount         Int?
+  paymentId      String?
+
+  createdAt      DateTime @default(now())
+
+  @@index([nutritionistId, periodEnd])
+}
+
+// ------------------------------------------------------------------
+// Mi cocina: heladera (RF12) y lista de compras (RF13)
+// Se guardan en el servidor para no perderse al cambiar de teléfono y
+// para que el generador de recetas (RF14/RF15) pueda leer la heladera.
+// ------------------------------------------------------------------
+
+model FridgeItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String   // "Huevos"
+  quantity  String?  // texto libre: "6 unidades", "500 g", "1 L"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+model ShoppingItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  quantity  String   @default("1")
+  done      Boolean  @default(false) // tachado como comprado
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+// ------------------------------------------------------------------
+// Recetas inteligentes (RF14, RF15 · Premium)
+// Dos fuentes: recetas generadas por IA (Gemini) con lo que hay en la
+// heladera y recetas reales de FatSecret traducidas al español.
+// Condiciones de FatSecret: solo el recipe_id se puede guardar para
+// siempre; el resto de sus datos se puede tener como máximo 24 horas.
+// ------------------------------------------------------------------
+
+enum RecipeSource {
+  AI
+  FATSECRET
+}
+
+// Recetas guardadas (favoritas). Las de IA guardan la receta completa;
+// las de FatSecret guardan solo el recipe_id y se vuelven a pedir al abrirlas.
+model SavedRecipe {
+  id         String       @id @default(uuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  recipeKey  String       // "ai-<uuid>" o "fs-<recipe_id>"
+  source     RecipeSource
+  externalId String?      // recipe_id de FatSecret
+  data       Json?        // receta completa (solo las de IA)
+
+  createdAt  DateTime     @default(now())
+
+  @@unique([userId, recipeKey])
+  @@index([userId, createdAt])
+}
+
+// Cada pedido de "Sugerir recetas" que usó la IA. Sirve para el límite diario
+// (10 por día) y como caché: con la misma heladera y filtros se devuelve lo mismo.
+// Se borran a las 24 h (tienen datos de FatSecret).
+model RecipeSuggestion {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  requestHash String
+  recipes     Json
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+// Traducción al español del detalle de una receta de FatSecret (compartida
+// entre usuarios para no traducir dos veces). Vence a las 24 h.
+model FatSecretRecipeCache {
+  recipeId  String   @id
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ------------------------------------------------------------------
+// Suscripciones con Mercado Pago (débito automático / preapproval)
+// ------------------------------------------------------------------
+
+enum SubscriptionKind {
+  PRO_MONTHLY
+  PRO_ANNUAL
+  NUTRITIONIST
+}
+
+enum SubscriptionStatus {
+  PENDING     // creada, el usuario todavía no cargó la tarjeta
+  AUTHORIZED  // activa: Mercado Pago cobra en cada período
+  PAUSED
+  CANCELLED   // sin más cobros; el acceso sigue hasta accessUntil
+}
+
+model Subscription {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind            SubscriptionKind
+  status          SubscriptionStatus @default(PENDING)
+  amount          Int      // ARS por período
+  mpPreapprovalId String?  @unique
+  initPoint       String?
+  withTrial       Boolean  @default(false)
+  trialEndsAt     DateTime?
+  nextPaymentAt   DateTime?
+  // Hasta cuándo da acceso lo que ya está pago (o la prueba gratis).
+  accessUntil     DateTime?
+  authorizedAt    DateTime?
+  cancelledAt     DateTime?
+
+  payments        Payment[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, status])
+}
+
+// Cobro aprobado de una suscripción (un "authorized payment" de Mercado Pago).
+model Payment {
+  id                    String   @id @default(uuid())
+  subscriptionId        String
+  subscription          Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mpAuthorizedPaymentId String   @unique
+  mpPaymentId           String?
+  amount                Int
+  status                String
+  paidAt                DateTime
+
+  createdAt             DateTime @default(now())
+
+  @@index([userId, paidAt])
 }

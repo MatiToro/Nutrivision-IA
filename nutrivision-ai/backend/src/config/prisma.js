@@ -1,5 +1,4 @@
-// Instancia única de Prisma Client. Evita abrir una conexión nueva por
-// cada import (problema clásico con hot-reload / serverless).
+// Instancia única de Prisma Client. Evita abrir una conexión nueva por cada import.
 const { PrismaClient } = require('@prisma/client');
 const env = require('./env');
 

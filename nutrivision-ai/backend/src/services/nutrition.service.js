@@ -1,6 +1,5 @@
-// Cálculo de metas diarias a partir de los datos biométricos del
-// Formulario de Objetivos, usando la fórmula de Mifflin-St Jeor
-// (estándar aceptado para estimar el gasto calórico basal).
+// Cálculo de metas diarias a partir de los datos biométricos del Formulario de Objetivos,
+// usando la fórmula estándar para estimar el gasto calórico.
 
 const ACTIVITY_FACTORS = {
   SEDENTARY: 1.2,

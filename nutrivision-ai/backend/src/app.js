@@ -13,8 +13,7 @@ const { apiLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
 
-// Confía en el proxy (necesario en producción detrás de un load balancer
-// para que express-rate-limit e IPs de log sean correctas).
+
 app.set('trust proxy', 1);
 
 // --- Seguridad de cabeceras HTTP ---

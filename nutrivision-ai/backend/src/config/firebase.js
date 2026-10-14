@@ -1,4 +1,4 @@
-// Inicializa Firebase Admin SDK para poder VERIFICAR (no emitir) los
+// Inicializa Firebase Admin SDK para poder VERIFICAR los
 // tokens de sesión que el frontend obtiene de Firebase Authentication /
 // Google Identity Services. El backend nunca maneja contraseñas.
 const admin = require('firebase-admin');

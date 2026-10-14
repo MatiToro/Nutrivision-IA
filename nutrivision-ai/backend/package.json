@@ -9,7 +9,8 @@
     "start": "node src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "crear-admin": "node scripts/crear-admin.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

@@ -15,8 +15,6 @@ function errorHandler(err, req, res, next) {
   }
 
   const status = err.status || 500;
-  // En producción nunca devolvemos el mensaje interno/stack de errores 500
-  // (podría filtrar detalles de infraestructura). En dev sí, para debug.
   const message = status === 500 && env.isProduction
     ? 'Ocurrió un error interno. Ya estamos al tanto.'
     : err.message || 'Error interno del servidor.';

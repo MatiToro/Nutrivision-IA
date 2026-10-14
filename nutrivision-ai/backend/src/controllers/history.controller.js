@@ -1,8 +1,16 @@
 const prisma = require('../config/prisma');
 
-// GET /api/history/meals?from=&to=
+// Modo liviano (?fields=summary): sin fotos ni ingredientes. Lo usa el gráfico de
+// progreso de la app mobile, que puede pedir un mes entero de comidas.
+const SUMMARY_SELECT = {
+  id: true, name: true, source: true, loggedAt: true,
+  totalCalories: true, totalProteinG: true, totalCarbsG: true, totalFatG: true,
+};
+
+// GET /api/history/meals?from=&to=[&fields=summary]
 async function listMeals(req, res) {
   const { from, to } = req.query;
+  const summary = req.query.fields === 'summary';
 
   const meals = await prisma.meal.findMany({
     where: {
@@ -16,7 +24,7 @@ async function listMeals(req, res) {
         }
         : {}),
     },
-    include: { ingredients: true, coachFeedback: true },
+    ...(summary ? { select: SUMMARY_SELECT } : { include: { ingredients: true, coachFeedback: true } }),
     orderBy: { loggedAt: 'desc' },
   });
 
