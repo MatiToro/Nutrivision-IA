@@ -1,8 +1,6 @@
-const APP_URL = 'https://nutrivision.ai/app'; // reemplazar por el link real de las tiendas
+import { APP_DOWNLOAD_URL, APP_QR_SRC } from '../constants/app';
 
 export default function DownloadAppBanner() {
-  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=132x132&margin=6&color=1E2A1E&bgcolor=FFFEF9&data=${encodeURIComponent(APP_URL)}`;
-
   return (
     <div className="download-banner">
       <div>
@@ -14,11 +12,12 @@ export default function DownloadAppBanner() {
           y las rachas, descargá NutriVision AI en tu teléfono.
         </p>
         <div className="download-banner__stores">
-          <span className="download-banner__store-badge">App Store</span>
-          <span className="download-banner__store-badge">Google Play</span>
+          <a className="download-banner__store-badge" href={APP_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
+            Descargar para Android (APK)
+          </a>
         </div>
       </div>
-      <img src={qrSrc} alt="Código QR para descargar NutriVision AI mobile" width={132} height={132} />
+      <img src={APP_QR_SRC} alt="Código QR para descargar NutriVision IA para Android" width={132} height={132} />
 
       <style>{`
         .download-banner {
@@ -41,6 +40,7 @@ export default function DownloadAppBanner() {
           color: var(--color-primary);
           border-radius: 999px;
           padding: 5px 12px;
+          text-decoration: none;
         }
         .download-banner img { border-radius: 10px; background: white; padding: 6px; }
       `}
