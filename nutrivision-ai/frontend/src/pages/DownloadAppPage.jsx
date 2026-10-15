@@ -1,7 +1,7 @@
-import { Smartphone, Apple, PlayCircle, Camera, Zap, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
+import { Smartphone, Download, Camera, Zap, ShieldCheck } from 'lucide-react';
 import { PageTitle } from '../components/ui';
-
-const APP_URL = 'nutrivision.ai/app'; // reemplazar por el link real cuando exista
+import { APP_DOWNLOAD_URL, APP_QR_SRC } from '../constants/app';
 
 const FEATURES = [
   { Icon: Camera, title: 'Escaneo con IA', desc: 'Fotografiá tu plato y obtené macros y calorías en segundos.' },
@@ -11,15 +11,21 @@ const FEATURES = [
 ];
 
 export default function DownloadAppPage() {
-  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&color=17191C&bgcolor=FFFFFF&data=${encodeURIComponent(`https://${APP_URL}`)}`;
+  const [copied, setCopied] = useState(false);
 
-  function copyLink() {
-    navigator.clipboard?.writeText(`https://${APP_URL}`);
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(APP_DOWNLOAD_URL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Sin permiso de portapapeles: el link igual se puede seleccionar a mano.
+    }
   }
 
   return (
     <div className="page download-page">
-      <PageTitle title="Descargar la app" subtitle="NutriVision IA en tu bolsillo — disponible para iOS y Android." />
+      <PageTitle title="Descargar la app" subtitle="NutriVision IA en tu bolsillo — disponible para Android." />
 
       <div className="download-page__grid">
         {/* Columna izquierda */}
@@ -56,37 +62,33 @@ export default function DownloadAppPage() {
         <div className="download-page__right">
           <section className="card download-page__qr-card">
             <h3>Escaneá y descargá</h3>
-            <p className="hint">Apuntá la cámara de tu teléfono al código para ir directo a la tienda.</p>
+            <p className="hint">Apuntá la cámara de tu teléfono Android al código para ir directo a la descarga.</p>
             <div className="download-page__qr-wrap">
-              <img src={qrSrc} alt="Código QR de acceso a NutriVision IA mobile" width={150} height={150} />
+              <img src={APP_QR_SRC} alt="Código QR para descargar NutriVision IA para Android" width={150} height={150} />
             </div>
 
             <div className="download-page__divider"><span>o descargá directo</span></div>
 
             <div className="download-page__store-buttons">
-              <button type="button" className="download-page__store-btn">
-                <Apple size={22} />
+              <a className="download-page__store-btn" href={APP_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
+                <Download size={22} />
                 <span className="download-page__store-btn-text">
-                  <span>Descargar en</span>
-                  <strong>App Store</strong>
+                  <span>Descargar para</span>
+                  <strong>Android (APK)</strong>
                 </span>
-              </button>
-              <button type="button" className="download-page__store-btn">
-                <PlayCircle size={22} />
-                <span className="download-page__store-btn-text">
-                  <span>Descargar en</span>
-                  <strong>Google Play</strong>
-                </span>
-              </button>
+              </a>
             </div>
-            <p className="hint download-page__requirements">Gratis · Requiere iOS 15+ o Android 8+</p>
+            <p className="hint download-page__requirements">
+              Gratis · Al instalar, Android te pide permitir “instalar apps de origen desconocido”.
+              La versión para iPhone llega próximamente.
+            </p>
           </section>
 
           <section className="card">
             <div className="section-header"><h3>Compartir link de descarga</h3></div>
             <div className="download-page__share-row">
-              <div className="download-page__share-url">{APP_URL}</div>
-              <button type="button" className="pill-btn pill-btn--solid" onClick={copyLink}>Copiar</button>
+              <a className="download-page__share-url" href={APP_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">{APP_DOWNLOAD_URL}</a>
+              <button type="button" className="pill-btn pill-btn--solid" onClick={copyLink}>{copied ? '¡Copiado!' : 'Copiar'}</button>
             </div>
           </section>
         </div>
@@ -134,6 +136,7 @@ export default function DownloadAppPage() {
         .download-page__store-btn {
           display: flex; align-items: center; gap: 12px; width: 100%; background: var(--color-ink); color: #fff;
           border: none; border-radius: var(--radius-md); padding: 12px 16px; cursor: pointer; transition: transform 0.1s ease;
+          text-decoration: none; box-sizing: border-box;
         }
         .download-page__store-btn:hover { transform: translateY(-1px); }
         .download-page__store-btn-text { display: flex; flex-direction: column; align-items: flex-start; font-size: 0.76rem; line-height: 1.3; }
@@ -144,7 +147,7 @@ export default function DownloadAppPage() {
         .download-page__share-url {
           flex: 1; min-width: 0; background: var(--color-bg); border-radius: var(--radius-md);
           padding: 10px 14px; font-size: 0.88rem; font-weight: 600; color: var(--color-ink-soft);
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none;
         }
       `}
       </style>
