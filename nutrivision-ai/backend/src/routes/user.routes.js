@@ -33,7 +33,7 @@ const onboardingValidation = [
     .if(body('birthDate').not().exists())
     .isInt({ min: MIN_AGE, max: MAX_AGE })
     .withMessage('Edad inválida.'),
-  body('sex').isIn(['MALE', 'FEMALE', 'OTHER']),
+  body('sex').isIn(['MALE', 'FEMALE']),
   body('activityLevel').isIn(['SEDENTARY', 'LIGHT', 'MODERATE', 'ACTIVE', 'VERY_ACTIVE']),
   body('goal').isIn(GOAL_VALUES),
 ];
