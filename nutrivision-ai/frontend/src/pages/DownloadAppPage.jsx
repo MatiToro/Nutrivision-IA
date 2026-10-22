@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Smartphone, Download, Camera, Zap, ShieldCheck } from 'lucide-react';
+import { Smartphone, Download, Camera, Zap, ShieldCheck, Link2, Check } from 'lucide-react';
 import { PageTitle } from '../components/ui';
 import { APP_DOWNLOAD_URL, APP_QR_SRC } from '../constants/app';
 
@@ -14,12 +14,25 @@ export default function DownloadAppPage() {
   const [copied, setCopied] = useState(false);
 
   async function copyLink() {
+    let ok = false;
     try {
       await navigator.clipboard.writeText(APP_DOWNLOAD_URL);
+      ok = true;
+    } catch {
+      // Navegadores sin permiso de portapapeles: copia con un campo oculto.
+      const tmp = document.createElement('textarea');
+      tmp.value = APP_DOWNLOAD_URL;
+      tmp.setAttribute('readonly', '');
+      tmp.style.position = 'fixed';
+      tmp.style.opacity = '0';
+      document.body.appendChild(tmp);
+      tmp.select();
+      try { ok = document.execCommand('copy'); } catch { ok = false; }
+      document.body.removeChild(tmp);
+    }
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Sin permiso de portapapeles: el link igual se puede seleccionar a mano.
     }
   }
 
@@ -84,20 +97,23 @@ export default function DownloadAppPage() {
             </p>
           </section>
 
-          <section className="card">
-            <div className="section-header"><h3>Compartir link de descarga</h3></div>
-            <div className="download-page__share-row">
-              <a className="download-page__share-url" href={APP_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">{APP_DOWNLOAD_URL}</a>
-              <button type="button" className="pill-btn pill-btn--solid" onClick={copyLink}>{copied ? '¡Copiado!' : 'Copiar'}</button>
+          <section className="card download-page__share">
+            <span className="icon-tile"><Link2 size={20} /></span>
+            <div className="download-page__share-text">
+              <h3>Compartir link de descarga</h3>
+              <p className="hint">Copiá el link y mandáselo a quien quieras.</p>
             </div>
+            <button type="button" className="pill-btn pill-btn--solid download-page__share-btn" onClick={copyLink}>
+              {copied ? <><Check size={16} /> ¡Copiado!</> : 'Copiar'}
+            </button>
           </section>
         </div>
       </div>
 
       <style>{`
-        .download-page__grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
+        .download-page__grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; align-items: start; }
         @media (max-width: 960px) { .download-page__grid { grid-template-columns: 1fr; gap: 16px; } }
-        .download-page__left, .download-page__right { display: flex; flex-direction: column; gap: 16px; }
+        .download-page__left, .download-page__right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
         .download-page__hero {
           position: relative; overflow: hidden; background: var(--gradient-primary); color: #fff;
@@ -143,11 +159,14 @@ export default function DownloadAppPage() {
         .download-page__store-btn-text strong { font-size: 0.95rem; font-weight: 800; }
         .download-page__requirements { margin-top: 12px; }
 
-        .download-page__share-row { display: flex; gap: 8px; align-items: center; }
-        .download-page__share-url {
-          flex: 1; min-width: 0; background: var(--color-bg); border-radius: var(--radius-md);
-          padding: 10px 14px; font-size: 0.88rem; font-weight: 600; color: var(--color-ink-soft);
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none;
+        .download-page__share { display: flex; align-items: center; gap: 14px; }
+        .download-page__share-text { flex: 1; min-width: 0; }
+        .download-page__share-text h3 { margin: 0 0 2px; }
+        .download-page__share-text .hint { margin: 0; }
+        .download-page__share-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; }
+        @media (max-width: 420px) {
+          .download-page__share { flex-wrap: wrap; }
+          .download-page__share-btn { width: 100%; justify-content: center; }
         }
       `}
       </style>
