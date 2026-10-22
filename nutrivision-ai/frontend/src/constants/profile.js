@@ -7,7 +7,6 @@ import {
 export const SEX_OPTIONS = [
   { value: 'MALE', label: 'Masculino' },
   { value: 'FEMALE', label: 'Femenino' },
-  { value: 'OTHER', label: 'Otro' },
 ];
 
 export const ACTIVITY_OPTIONS = [
