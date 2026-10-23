@@ -244,8 +244,8 @@ export default function DashboardPage() {
         .dashboard__intro h1 { margin: 0; }
         .dashboard__intro p { margin: 2px 0 0; color: var(--color-ink-soft); font-size: 0.92rem; }
 
-        .dashboard__top { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; align-items: stretch; }
-        @media (max-width: 960px) { .dashboard__top { grid-template-columns: 1fr; gap: 16px; } }
+        .dashboard__top { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; align-items: stretch; }
+        @media (max-width: 960px) { .dashboard__top { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
 
         /* Progreso del día */
         .dashboard__progress {
@@ -256,6 +256,7 @@ export default function DashboardPage() {
         .dashboard__progress-head h3 { margin: 0; color: #fff; font-size: 1.02rem; font-weight: 800; }
         .dashboard__progress-body { display: flex; align-items: center; gap: 20px; flex: 1; }
         @media (max-width: 420px) { .dashboard__progress-body { gap: 14px; } }
+        @media (max-width: 400px) { .dashboard__progress-body { flex-direction: column; align-items: stretch; } .dashboard__ring { align-self: center; } }
 
         .dashboard__ring { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
         @media (max-width: 420px) { .dashboard__ring { width: 118px; height: 118px; } }
