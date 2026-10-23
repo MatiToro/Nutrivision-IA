@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import AuthLayout from '../components/AuthLayout';
 
 export default function LoginPage() {
-  const { login, loginWithGoogle, resetPassword } = useAuth();
+  const { login, loginWithGoogle, applyRememberMe, resetPassword } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectTo = location.state?.from?.pathname || '/';
@@ -94,6 +94,17 @@ export default function LoginPage() {
           </div>
 
           <div className="auth-form__forgot">
+            <label className="auth-form__remember">
+              <input
+                type="checkbox"
+                checked={form.rememberMe}
+                onChange={(e) => {
+                  setForm({ ...form, rememberMe: e.target.checked });
+                  applyRememberMe(e.target.checked);
+                }}
+              />
+              Recordarme
+            </label>
             <button type="button" onClick={handleForgotPassword} disabled={resetting}>
               {resetting ? 'Enviando…' : '¿Olvidaste tu contraseña?'}
             </button>
