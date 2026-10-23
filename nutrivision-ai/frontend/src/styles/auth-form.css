@@ -75,8 +75,29 @@
 
 .auth-form__forgot {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-top: -2px;
+}
+
+.auth-form__remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.auth-form__remember input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
 }
 
 .auth-form__forgot button,
@@ -178,31 +199,3 @@
   font-size: 0.8rem;
   color: var(--color-ink-soft);
 }
-
-/* ---- Términos y Política de Privacidad ---- */
-.auth-form__terms-link {
-  background: none; border: none; padding: 0; font: inherit; cursor: pointer;
-  text-decoration: underline; text-underline-offset: 2px;
-}
-.auth-form__terms-link:hover { color: var(--color-primary-dark); }
-
-.legal-modal { max-width: 640px; display: flex; flex-direction: column; overflow: hidden; }
-.legal-modal__header {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-  padding: 22px 24px 14px; border-bottom: 1px solid var(--color-line);
-}
-.legal-modal__header h3 { margin: 0; font-size: 1.25rem; font-weight: 800; }
-.legal-modal__updated { font-size: 0.8rem; color: var(--color-ink-soft); }
-.legal-modal__body { padding: 6px 24px 16px; overflow-y: auto; }
-.legal-modal__body h4 { margin: 18px 0 6px; font-size: 0.98rem; font-weight: 800; color: var(--color-ink); }
-.legal-modal__body p { margin: 0 0 8px; font-size: 0.9rem; line-height: 1.6; color: var(--color-ink-soft); }
-.legal-modal__footer { padding: 14px 24px 20px; border-top: 1px solid var(--color-line); display: flex; justify-content: flex-end; }
-.legal-modal__footer .btn { min-width: 140px; }
-@media (max-width: 600px) {
-  .legal-modal__header, .legal-modal__body, .legal-modal__footer { padding-left: 18px; padding-right: 18px; }
-  .legal-modal__footer .btn { width: 100%; }
-}
-.auth-form__google-note {
-  margin: 10px 0 0; text-align: center; font-size: 0.8rem; line-height: 1.5; color: var(--color-ink-soft);
-}
-.auth-form__google-note .auth-form__terms-link { color: var(--color-primary); font-weight: 700; }
