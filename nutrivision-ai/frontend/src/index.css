@@ -118,8 +118,8 @@ img { max-width: 100%; }
 .page-title p { margin: 2px 0 0; color: var(--color-ink-soft); font-size: 0.92rem; }
 .page-title__right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
-@media (max-width: 960px) { .grid-2 { grid-template-columns: 1fr; gap: 16px; } }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .grid-2 { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
 
 /* ---- Tarjetas ---- */
 .card {
