@@ -163,6 +163,13 @@ export function AuthProvider({ children }) {
     }
   }, [fetchProfile]);
 
+  // Casilla "Recordarme": se aplica al tildarla/destildarla (antes de tocar
+  // "Continuar con Google"), así la ventana de Google se abre sin demoras y
+  // los navegadores no la bloquean.
+  const applyRememberMe = useCallback((rememberMe) => (
+    setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence).catch(() => {})
+  ), []);
+
   // `role`: desde el Registro, el tipo de cuenta elegido antes de tocar "Continuar con Google".
   const loginWithGoogle = useCallback(async ({ role } = {}) => {
     setError(null);
@@ -216,6 +223,7 @@ export function AuthProvider({ children }) {
     role: profile?.role || 'USER',
     login,
     loginWithGoogle,
+    applyRememberMe,
     resetPassword,
     logout,
     isAuthenticated: Boolean(firebaseUser),
