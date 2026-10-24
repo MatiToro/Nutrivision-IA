@@ -33,7 +33,24 @@ async function respondSummary(req, res, extra = {}) {
 }
 
 // GET /api/payments/me
+// Si quedó un intento de pago "pendiente" de las últimas 48 h, se vuelve a
+// consultar a Mercado Pago antes de responder. Así el plan se activa al abrir
+// la pantalla aunque la app haya preguntado demasiado pronto al volver del
+// checkout o el webhook no haya llegado.
 async function getMine(req, res) {
+  const pending = await prisma.subscription.findFirst({
+    where: {
+      userId: req.user.id,
+      status: 'PENDING',
+      mpPreapprovalId: { not: null },
+      createdAt: { gt: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (pending) {
+    await subs.syncSubscription(pending)
+      .catch((err) => logger.warn(`No se pudo re-sincronizar ${pending.id}: ${err.message}`));
+  }
   return respondSummary(req, res);
 }
 
