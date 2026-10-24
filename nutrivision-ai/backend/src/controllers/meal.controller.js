@@ -1,6 +1,6 @@
 const prisma = require('../config/prisma');
 const geminiService = require('../services/gemini.service');
-const fatSecretService = require('../services/fatsecret.service');
+const { verifyIngredients } = require('../services/foodVerify.service');
 const { sumIngredients } = require('../services/nutrition.service');
 const { FREE_DAILY_SCAN_LIMIT } = require('./plan.controller');
 const { isPremiumUser } = require('../utils/premium');
@@ -33,13 +33,10 @@ async function analyzeMeal(req, res) {
     });
   }
 
-  // Enriquecimiento opcional contra FatSecret (no bloquea el flujo si falla).
-  await Promise.allSettled(
-    analysis.ingredients.map(async (ing) => {
-      const match = await fatSecretService.searchFood(ing.name);
-      if (match) ing.fatSecretFoodId = match.fatSecretFoodId;
-    }),
-  );
+  // Verificación contra FatSecret: si encuentra el alimento genérico y los
+  // valores son razonables, los macros pasan a ser los de FatSecret. Si no
+  // (o si FatSecret falla), quedan los estimados por Gemini.
+  analysis.ingredients = await verifyIngredients(analysis.ingredients);
 
   const totals = sumIngredients(analysis.ingredients);
   const feedback = await geminiService.generateCoachFeedback(
@@ -163,11 +160,10 @@ async function ingredientNutrition(req, res) {
     });
   }
 
-  let fatSecretFoodId = null;
-  const match = await fatSecretService.searchFood(name);
-  if (match) fatSecretFoodId = match.fatSecretFoodId;
+  // Mismo control que en el escaneo: FatSecret valida los macros si puede.
+  const [checked] = await verifyIngredients([{ name, ...result }]);
 
-  res.json({ ingredient: { name, ...result, fatSecretFoodId } });
+  res.json({ ingredient: { ...checked, recognized: result.recognized } });
 }
 
 // POST /api/meals/coach  { dishName, ingredients[] }
