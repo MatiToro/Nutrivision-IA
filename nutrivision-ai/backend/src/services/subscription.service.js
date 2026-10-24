@@ -256,6 +256,9 @@ async function applyPreapproval(sub, pre, authorizedPayments = []) {
   const status = STATUS_MAP[pre.status] || sub.status;
   const nextPaymentAt = pre.next_payment_date ? new Date(pre.next_payment_date) : null;
 
+  // Para diagnosticar: qué estado informa Mercado Pago en cada sincronización.
+  logger.info(`Sync ${sub.id} (${sub.kind}): Mercado Pago dice status=${pre.status}, next_payment_date=${pre.next_payment_date || '-'}`);
+
   const imported = await importPayments(sub, authorizedPayments);
   const lastPayment = await prisma.payment.findFirst({ where: { subscriptionId: sub.id }, orderBy: { paidAt: 'desc' } });
   const paidThrough = lastPayment ? addMonths(lastPayment.paidAt, plan.months) : null;
