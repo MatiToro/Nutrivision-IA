@@ -5,6 +5,7 @@ const TOKEN_URL = 'https://oauth.fatsecret.com/connect/token';
 const SEARCH_URL = 'https://platform.fatsecret.com/rest/foods/search/v1';
 const RECIPE_SEARCH_URL = 'https://platform.fatsecret.com/rest/recipes/search/v3';
 const RECIPE_GET_URL = 'https://platform.fatsecret.com/rest/recipe/v2';
+const FOOD_GET_URL = 'https://platform.fatsecret.com/rest/food/v4';
 const REQUEST_TIMEOUT_MS = 12_000;
 
 let cachedToken = null;
@@ -117,6 +118,73 @@ async function getJson(url, params) {
   return data;
 }
 
+// ------------------------------------------------------------------
+// Información nutricional de un alimento (para verificar el escaneo).
+// Se busca con el nombre en inglés (la base de FatSecret es la de EE. UU.)
+// y se devuelve por 100 g. Solo se usan alimentos genéricos (no marcas).
+// Caché en memoria de 24 h (las condiciones de FatSecret lo permiten).
+// ------------------------------------------------------------------
+const FOOD_CACHE_MS = 24 * 60 * 60 * 1000;
+const foodCache = new Map();
+
+// "Per 100g - Calories: 165kcal | Fat: 3.57g | Carbs: 0.00g | Protein: 31.02g"
+function per100FromDescription(description) {
+  const m = String(description || '').match(
+    /^Per\s+100\s*g\s*-\s*Calories:\s*([\d.]+)\s*kcal\s*\|\s*Fat:\s*([\d.]+)\s*g\s*\|\s*Carbs:\s*([\d.]+)\s*g\s*\|\s*Protein:\s*([\d.]+)\s*g/i,
+  );
+  if (!m) return null;
+  return { calories: Number(m[1]), fatG: Number(m[2]), carbsG: Number(m[3]), proteinG: Number(m[4]) };
+}
+
+// Porciones de food.get: se busca una con peso en gramos y se lleva a 100 g.
+function per100FromServings(servings) {
+  const s = servings.find((x) => String(x.metric_serving_unit) === 'g' && toNum(x.metric_serving_amount) > 0
+    && toNum(x.calories) != null);
+  if (!s) return null;
+  const k = 100 / toNum(s.metric_serving_amount);
+  return {
+    calories: toNum(s.calories) * k,
+    proteinG: (toNum(s.protein) || 0) * k,
+    carbsG: (toNum(s.carbohydrate) || 0) * k,
+    fatG: (toNum(s.fat) || 0) * k,
+  };
+}
+
+/**
+ * Busca un alimento genérico y devuelve sus macros por 100 g.
+ * @param {string} englishName  ej. "grilled chicken breast"
+ * @returns {Promise<{fatSecretFoodId: string, foodName: string, per100: object}|null>}
+ *   null si FatSecret no está configurado, no hay un genérico o falla.
+ */
+async function findFoodNutrition(englishName) {
+  if (!env.fatSecret.isConfigured) return null;
+  const key = String(englishName || '').trim().toLowerCase();
+  if (!key) return null;
+  const cached = foodCache.get(key);
+  if (cached && Date.now() - cached.at < FOOD_CACHE_MS) return cached.value;
+
+  try {
+    const data = await getJson(SEARCH_URL, { search_expression: key, max_results: '10' });
+    const food = asArray(data?.foods?.food).find((f) => f.food_type === 'Generic');
+    let value = null;
+    if (food) {
+      let per100 = per100FromDescription(food.food_description);
+      if (!per100) {
+        const detail = await getJson(FOOD_GET_URL, { food_id: String(food.food_id) });
+        per100 = per100FromServings(asArray(detail?.food?.servings?.serving));
+      }
+      if (per100) value = { fatSecretFoodId: String(food.food_id), foodName: String(food.food_name || ''), per100 };
+    }
+    if (foodCache.size > 1000) foodCache.clear();
+    foodCache.set(key, { at: Date.now(), value });
+    return value;
+  } catch (err) {
+    logger.warn(`FatSecret foods.search falló para "${key}": ${err.message}`);
+    warnIfIpBlocked(err);
+    return null;
+  }
+}
+
 /**
  * Busca recetas por texto (en inglés). Si FatSecret no está configurado o falla
  * devuelve { recipes: [], error }: las recetas de IA siguen funcionando igual.
@@ -201,4 +269,4 @@ async function getRecipe(recipeId) {
   }
 }
 
-module.exports = { searchFood, searchRecipes, getRecipe };
+module.exports = { searchFood, findFoodNutrition, searchRecipes, getRecipe };

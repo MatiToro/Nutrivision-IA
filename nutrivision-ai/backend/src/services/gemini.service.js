@@ -29,13 +29,14 @@ const ANALYSIS_SCHEMA = {
         type: 'OBJECT',
         properties: {
           name: { type: 'STRING' },
+          englishName: { type: 'STRING' },
           grams: { type: 'NUMBER' },
           calories: { type: 'NUMBER' },
           proteinG: { type: 'NUMBER' },
           carbsG: { type: 'NUMBER' },
           fatG: { type: 'NUMBER' },
         },
-        required: ['name', 'grams', 'calories', 'proteinG', 'carbsG', 'fatG'],
+        required: ['name', 'englishName', 'grams', 'calories', 'proteinG', 'carbsG', 'fatG'],
       },
     },
   },
@@ -65,7 +66,10 @@ Instrucciones:
 5. Calculá calorías (kcal), proteínas, carbohidratos y grasas (en gramos) de cada componente
    para ESA cantidad, usando valores de tablas nutricionales estándar (USDA / tablas argentinas).
 6. Los números deben ser coherentes: calorías ≈ 4*proteína + 4*carbohidratos + 9*grasa.
-7. Usá nombres de ingredientes simples en español (ej. "Arroz blanco cocido", "Pechuga de pollo grillada").`;
+7. Usá nombres de ingredientes simples en español (ej. "Arroz blanco cocido", "Pechuga de pollo grillada").
+8. englishName: el mismo ingrediente en inglés, como alimento genérico de una tabla nutricional
+   (USDA), con la forma de cocción si corresponde (ej. "cooked white rice", "grilled chicken breast",
+   "mashed potatoes"). Sin marcas ni cantidades.`;
 
 // ------------------------------------------------------------------
 // Llamada HTTP a Gemini
@@ -217,6 +221,7 @@ function sanitizeIngredients(list) {
     .slice(0, 20)
     .map((ing) => ({
       name: ing.name.trim().slice(0, 120),
+      englishName: typeof ing.englishName === 'string' ? ing.englishName.trim().slice(0, 120) : '',
       grams: num(ing.grams, 3000),
       calories: Math.round(num(ing.calories, 5000)),
       proteinG: num(ing.proteinG, 500),
@@ -411,6 +416,7 @@ const INGREDIENT_SCHEMA = {
   type: 'OBJECT',
   properties: {
     recognized: { type: 'BOOLEAN' },
+    englishName: { type: 'STRING' },
     calories: { type: 'NUMBER' },
     proteinG: { type: 'NUMBER' },
     carbsG: { type: 'NUMBER' },
@@ -437,7 +443,9 @@ carbohidratos y grasas (en gramos) de ${grams} g de "${name}", tal como se come 
 (si es una preparación cocida, frita o al horno, considerala así). Usá valores de tablas
 nutricionales estándar (USDA / tablas argentinas). Los números deben ser coherentes:
 calorías ≈ 4*proteína + 4*carbohidratos + 9*grasa.
-Si "${name}" no es un alimento o bebida reconocible, devolvé recognized=false y todo en 0.`;
+Si "${name}" no es un alimento o bebida reconocible, devolvé recognized=false y todo en 0.
+englishName: el alimento en inglés como genérico de una tabla nutricional (USDA), con la forma de
+cocción si corresponde (ej. "grilled chicken breast"), sin marcas ni cantidades.`;
 
   let parsed;
   try {
@@ -460,6 +468,7 @@ Si "${name}" no es un alimento o bebida reconocible, devolvé recognized=false y
 
   return {
     recognized: parsed.recognized !== false,
+    englishName: typeof parsed.englishName === 'string' ? parsed.englishName.trim().slice(0, 120) : '',
     grams,
     calories: Math.round(num(parsed.calories, 5000)),
     proteinG: num(parsed.proteinG, 500),
