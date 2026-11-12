@@ -93,10 +93,18 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <div className="auth-form__forgot">
-            <label className="auth-form__remember">
+          {/* Estilos en línea a propósito: la fila no depende de auth-form.css */}
+          <div
+            className="auth-form__forgot"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}
+          >
+            <label
+              className="auth-form__remember"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginRight: 'auto', cursor: 'pointer', fontSize: '0.86rem', fontWeight: 600, color: 'var(--color-ink-soft)' }}
+            >
               <input
                 type="checkbox"
+                style={{ width: 16, height: 16, margin: 0, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
                 checked={form.rememberMe}
                 onChange={(e) => {
                   setForm({ ...form, rememberMe: e.target.checked });

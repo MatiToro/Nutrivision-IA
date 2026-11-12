@@ -40,6 +40,8 @@ export default function UploadMealPage() {
   const [coachUpdating, setCoachUpdating] = useState(false);
   const [coachError, setCoachError] = useState(null);
   const coachRequestId = useRef(0);
+  // analyze() es un useCallback: llama a la versión actual de regenerateCoach por esta ref.
+  const regenerateCoachRef = useRef(() => {});
 
   // Escaneos disponibles hoy (plan Gratuito: 3 por día). null = cargando.
   const [quota, setQuota] = useState(null);
@@ -52,6 +54,12 @@ export default function UploadMealPage() {
     }
   }, []);
   useEffect(() => { loadQuota(); }, [loadQuota]);
+
+  // Comidas recientes para "Registrar de nuevo" sin foto (no gastan escaneos).
+  const [recent, setRecent] = useState([]);
+  useEffect(() => {
+    apiClient.get('/meals/recent').then(({ data }) => setRecent(data.meals ?? [])).catch(() => {});
+  }, []);
   const limitReached = Boolean(quota && !quota.isPremium && quota.plan !== 'PREMIUM' && quota.scansRemaining === 0);
 
   const analyze = useCallback(async (selectedFile) => {
@@ -60,16 +68,20 @@ export default function UploadMealPage() {
     try {
       const formData = new FormData();
       formData.append('image', selectedFile);
-      const { data } = await apiClient.post('/meals/analyze', formData, {
+      // deferCoach=1: el resultado vuelve sin el Coach y se muestra enseguida;
+      // el Coach (breve en Gratis, completo en Pro) se pide justo después.
+      const { data } = await apiClient.post('/meals/analyze?deferCoach=1', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        // El análisis real con Gemini (visión + coach) puede tardar más que
-        // el timeout general de 20 s del cliente.
+        // El análisis real con Gemini puede tardar más que el timeout general de 20 s del cliente.
         timeout: 90000,
       });
-      setAnalysis({ ...data, ingredients: data.ingredients.map(withBasis) });
+      const ingredients = data.ingredients.map(withBasis);
+      setAnalysis({ ...data, ingredients, coachFeedback: data.coachFeedback ?? null });
       setCoachError(null);
       // Pre-cargamos el nombre sugerido por la IA; el usuario lo puede cambiar.
       if (data.dishName) setPlateName(data.dishName);
+      loadQuota(); // la foto analizada ya cuenta como escaneo del día
+      if (!data.coachFeedback) regenerateCoachRef.current(ingredients, data.dishName || '');
     } catch (err) {
       setError(err.message);
       setPreviewUrl(null);
@@ -77,7 +89,7 @@ export default function UploadMealPage() {
     } finally {
       setAnalyzing(false);
     }
-  }, []);
+  }, [loadQuota]);
 
   const validateAndAnalyze = useCallback(async (selectedFile) => {
     setError(null);
@@ -138,28 +150,35 @@ export default function UploadMealPage() {
     setAnalysis((a) => ({ ...a, ingredients: cleaned, totals: sumIngredients(cleaned) }));
     setEditing(false);
     // El consejo del Coach tiene que corresponder al plato como quedó.
-    if (changed) regenerateCoach(cleaned);
+    if (changed) regenerateCoach(cleaned, plateName);
   }
 
-  async function regenerateCoach(ingredients) {
+  // Pide la devolución del Coach (después del análisis y al editar ingredientes).
+  async function regenerateCoach(ingredients, dishName) {
+    const hadCoach = Boolean(analysis?.coachFeedback);
     coachRequestId.current += 1;
     const requestId = coachRequestId.current;
     setCoachUpdating(true);
     setCoachError(null);
     try {
       const { data } = await apiClient.post('/meals/coach', {
-        dishName: plateName.trim(),
+        dishName: String(dishName || '').trim(),
         ingredients: ingredients.map(stripClientFields),
       }, { timeout: 60000 });
       if (requestId !== coachRequestId.current) return;
-      setAnalysis((a) => (a ? { ...a, coachFeedback: data.coachFeedback, coachMocked: data.coachMocked } : a));
+      setAnalysis((a) => (a ? {
+        ...a, coachFeedback: data.coachFeedback, coachMocked: data.coachMocked, coachLevel: data.coachLevel,
+      } : a));
     } catch (err) {
       if (requestId !== coachRequestId.current) return;
-      setCoachError(`No se pudo actualizar la devolución del Coach (${err.message}). La que ves corresponde al plato antes de editarlo.`);
+      setCoachError(hadCoach
+        ? `No se pudo actualizar la devolución del Coach (${err.message}). La que ves corresponde al plato antes de editarlo.`
+        : `El Coach no pudo responder (${err.message}). Podés guardar el plato igual: se guarda con una devolución básica.`);
     } finally {
       if (requestId === coachRequestId.current) setCoachUpdating(false);
     }
   }
+  useEffect(() => { regenerateCoachRef.current = regenerateCoach; });
 
   async function handleConfirm() {
     if (!plateName.trim()) {
@@ -173,7 +192,8 @@ export default function UploadMealPage() {
       formData.append('image', file);
       formData.append('name', plateName.trim());
       formData.append('ingredients', JSON.stringify(analysis.ingredients.map(stripClientFields)));
-      formData.append('coachFeedback', JSON.stringify(analysis.coachFeedback));
+      // Sin devolución (el Coach no respondió), el backend guarda una básica con reglas.
+      if (analysis.coachFeedback) formData.append('coachFeedback', JSON.stringify(analysis.coachFeedback));
       await apiClient.post('/meals', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -287,6 +307,22 @@ export default function UploadMealPage() {
           </section>
         </div>
 
+        {recent.length > 0 ? (
+          <section className="card scanner-recent">
+            <SectionHeader title="Repetir una comida" />
+            <p className="hint">¿Volviste a comer lo mismo? Registralo sin sacar foto: no gasta escaneos.</p>
+            {recent.map((m) => (
+              <Link to={`/meals/${m.id}?repetir=1`} key={m.id} className="meal-row">
+                <span className="icon-tile scanner-recent__icon"><RotateCcw size={16} /></span>
+                <span className="meal-row__body">
+                  <span className="meal-row__name">{m.name}</span>
+                </span>
+                <span className="meal-row__kcal">{Math.round(m.totalCalories || 0)} kcal</span>
+              </Link>
+            ))}
+          </section>
+        ) : null}
+
         <ScannerStyles />
       </div>
     );
@@ -388,9 +424,11 @@ export default function UploadMealPage() {
 
           <CoachCard
             feedback={feedback}
-            updating={coachUpdating}
+            updating={coachUpdating && Boolean(feedback)}
+            pending={coachUpdating && !feedback}
+            upsell={analysis.coachLevel === 'BRIEF'}
             notes={[
-              coachUpdating ? 'Actualizando la devolución según tus cambios…' : null,
+              coachUpdating && feedback ? 'Actualizando la devolución según tus cambios…' : null,
               coachError,
               analysis.coachMocked && !coachUpdating
                 ? 'Devolución básica calculada con reglas simples: la IA no respondió en este momento.'
@@ -434,6 +472,9 @@ function ScannerStyles() {
       /* ---- Estado inicial ---- */
       .scanner-start { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; align-items: start; }
       .scanner-start.is-locked .scanner-viewfinder { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+      .scanner-recent { margin-top: 20px; }
+      .scanner-recent .hint { margin: 0 0 6px; }
+      .scanner-recent__icon { width: 34px; height: 34px; }
       .scanner-quota { display: flex; align-items: center; gap: 14px; padding: 14px 18px; flex-wrap: wrap; }
       .scanner-quota.is-limit { background: var(--color-accent-soft); box-shadow: none; }
       .scanner-quota__text { flex: 1; min-width: 180px; display: flex; flex-direction: column; }
