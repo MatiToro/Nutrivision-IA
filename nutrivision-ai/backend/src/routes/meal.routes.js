@@ -11,8 +11,8 @@ const router = Router();
 router.use(requireAuth);
 
 // Carga de Imagen (Web y app mobile: cámara o galería): sube la foto y dispara
-// el análisis por visión artificial + devolución del Coach IA.
-// No guarda nada en la base todavía.
+// el análisis por visión artificial (+ Coach, salvo con ?deferCoach=1).
+// No guarda la comida todavía; sí registra el escaneo del día.
 router.post(
   '/analyze',
   mealAnalysisLimiter,
@@ -33,8 +33,8 @@ router.post(
   mealController.ingredientNutrition,
 );
 
-// Regenera la devolución del Coach IA después de editar ingredientes.
-// No guarda nada.
+// Devolución del Coach según el plan (breve Gratis / completo Pro): se pide
+// después del análisis y cada vez que se editan los ingredientes. No guarda nada.
 router.post(
   '/coach',
   mealEditLimiter,
@@ -58,6 +58,22 @@ router.post(
   '/',
   upload.single('image'),
   mealController.createMeal,
+);
+
+// Comidas recientes (sin fotos) para "Registrar de nuevo" desde el escáner.
+router.get('/recent', mealController.recentMeals);
+
+// "Registrar de nuevo": copia una comida al día de hoy. No usa la IA de visión
+// ni cuenta como escaneo; genera la devolución del Coach según el plan.
+router.post(
+  '/:id/repeat',
+  mealEditLimiter,
+  [
+    param('id').isUUID(),
+    body('portions').optional().isFloat({ min: 0.25, max: 10 }),
+  ],
+  handleValidation,
+  mealController.repeatMeal,
 );
 
 router.get('/:id', [param('id').isUUID()], handleValidation, mealController.getMeal);
