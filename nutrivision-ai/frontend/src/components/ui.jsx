@@ -1,4 +1,5 @@
-import { AlertTriangle, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, Crown, Sparkles } from 'lucide-react';
 
 /**
  * Piezas visuales compartidas — equivalentes a src/components/ui.js de la app mobile,
@@ -72,8 +73,27 @@ const ALIGNMENT = {
 };
 
 /** Devolución del Coach IA, con el aviso de que no reemplaza a un profesional. */
-export function CoachCard({ feedback, updating = false, notes = [] }) {
-  if (!feedback) return null;
+/**
+ * Devolución del Coach IA.
+ * - pending: el resultado del plato ya se ve y el Coach todavía se está generando.
+ * - upsell: plan Gratuito (Coach breve) → invitación al Coach completo de Pro.
+ */
+export function CoachCard({ feedback, updating = false, notes = [], pending = false, upsell = false }) {
+  if (!feedback) {
+    const shown = notes.filter(Boolean);
+    if (!pending && shown.length === 0) return null;
+    return (
+      <section className="coach-card is-pending" aria-busy={pending}>
+        <div className="coach-card__head">
+          <span className="coach-card__icon"><Sparkles size={18} /></span>
+          <span className="coach-card__title">Coach IA</span>
+          {pending ? <span className="coach-card__spinner" aria-hidden="true" /> : null}
+        </div>
+        {shown.length ? shown.map((n) => <p className="coach-card__note" key={n}>{n}</p>)
+          : <p className="coach-card__note">El Coach está analizando tu plato…</p>}
+      </section>
+    );
+  }
   const align = ALIGNMENT[feedback.alignment];
   return (
     <>
@@ -96,6 +116,12 @@ export function CoachCard({ feedback, updating = false, notes = [] }) {
             {feedback.tips.map((tip) => <li key={tip}>{tip}</li>)}
           </ul>
         )}
+        {upsell ? (
+          <div className="coach-card__upsell">
+            <p>¿Querés un análisis más completo? El Coach IA de Pro evalúa tu plato según tu objetivo y te da consejos personalizados.</p>
+            <Link to="/pricing" className="coach-card__upsell-btn"><Crown size={14} /> Ver NutriVision Pro</Link>
+          </div>
+        ) : null}
       </section>
     </>
   );
