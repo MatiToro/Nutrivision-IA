@@ -1,5 +1,4 @@
 const prisma = require('../config/prisma');
-const { isPremiumUser } = require('../utils/premium');
 const {
   listedWhere, isListed, ratingsFor, publicCard, contactsOf, shortName,
 } = require('../services/nutritionist.service');
@@ -8,7 +7,7 @@ const PAGE_SIZE = 30;
 
 // GET /api/nutritionists?q=&specialty=
 // Directorio: solo nutricionistas aprobados y con suscripción vigente.
-// Nunca devuelve contactos (eso es por perfil y solo para Premium).
+// Nunca devuelve contactos (eso es por perfil).
 async function listNutritionists(req, res) {
   const q = String(req.query.q || '').trim().slice(0, 60);
   const specialty = String(req.query.specialty || '').trim().slice(0, 60);
@@ -47,7 +46,7 @@ async function listNutritionists(req, res) {
 // GET /api/nutritionists/:id
 // Perfil público. Lo pueden ver todos si está en el directorio, y además
 // sus pacientes (actuales o anteriores) aunque haya dejado de pagar.
-// Los contactos solo se devuelven a usuarios Premium: la restricción es del backend, no solo visual.
+// Los contactos se devuelven a todos los usuarios (Gratis y Pro) desde la actualización v2.
 async function getNutritionist(req, res) {
   const profile = await prisma.nutritionistProfile.findUnique({
     where: { id: req.params.id },
@@ -79,16 +78,17 @@ async function getNutritionist(req, res) {
     }),
   ]);
 
-  const premium = isPremiumUser(req.user);
-  const canSeeContacts = premium && (listed || Boolean(activeLink));
+  // Desde la v2 los contactos son para todos (antes solo Premium): así el
+  // nutricionista, que paga para aparecer, recibe más consultas.
+  const canSeeContacts = listed || Boolean(activeLink);
 
   res.json({
     nutritionist: {
       ...publicCard(profile, ratings.get(profile.id)),
       listed,
       contacts: canSeeContacts ? contactsOf(profile) : null,
-      // true = los contactos existen pero hace falta Premium para verlos.
-      contactsLocked: !premium,
+      // Se mantiene por compatibilidad con versiones viejas de la app: ya no hay bloqueo.
+      contactsLocked: false,
       reviews: reviews.map((r) => ({
         id: r.id,
         stars: r.stars,

@@ -1,21 +1,23 @@
 const prisma = require('../config/prisma');
 const { isPremiumUser } = require('../utils/premium');
 
-// Límite real del plan Gratuito: cantidad de platos que se pueden
-// guardar por día. Se comparte con meal.controller.js.
+// Límite real del plan Gratuito: cantidad de FOTOS que se pueden analizar
+// con IA por día. Se comparte con meal.controller.js.
 const FREE_DAILY_SCAN_LIMIT = 3;
+
+// Escaneos de hoy = fotos analizadas con IA (tabla ScanLog). Las comidas
+// repetidas o registradas desde una receta no cuentan.
+async function countScansToday(userId) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  return prisma.scanLog.count({ where: { userId, createdAt: { gte: startOfDay } } });
+}
 
 // GET /api/plan
 // Devuelve el plan actual y el uso real del día, para que la pantalla
 // de Precios pueda mostrar cuántos escaneos te quedan hoy.
 async function getPlan(req, res) {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
-  // Las comidas registradas desde una receta no son escaneos.
-  const scansToday = await prisma.meal.count({
-    where: { userId: req.user.id, loggedAt: { gte: startOfDay }, source: { not: 'RECIPE' } },
-  });
+  const scansToday = await countScansToday(req.user.id);
 
   const isPremium = isPremiumUser(req.user);
 
@@ -34,4 +36,4 @@ async function getPlan(req, res) {
   });
 }
 
-module.exports = { getPlan, FREE_DAILY_SCAN_LIMIT };
+module.exports = { getPlan, countScansToday, FREE_DAILY_SCAN_LIMIT };

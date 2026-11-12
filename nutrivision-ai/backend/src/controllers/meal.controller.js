@@ -2,13 +2,17 @@ const prisma = require('../config/prisma');
 const geminiService = require('../services/gemini.service');
 const { verifyIngredients } = require('../services/foodVerify.service');
 const { sumIngredients } = require('../services/nutrition.service');
-const { FREE_DAILY_SCAN_LIMIT } = require('./plan.controller');
+const { FREE_DAILY_SCAN_LIMIT, countScansToday } = require('./plan.controller');
 const { isPremiumUser } = require('../utils/premium');
 const logger = require('../utils/logger');
 
-// POST /api/meals/analyze  (multipart/form-data, campo "image")
-// Solo ANALIZA — no escribe nada en la base todavía. El plato recién
-// se guarda cuando el usuario confirma con un nombre (ver createMeal).
+// POST /api/meals/analyze[?deferCoach=1]  (multipart/form-data, campo "image")
+// Solo ANALIZA — no guarda la comida todavía. El plato recién se guarda
+// cuando el usuario confirma con un nombre (ver createMeal).
+// Sí registra el escaneo (ScanLog), que es lo que cuenta el límite diario.
+// Con ?deferCoach=1 (app y web nuevas) devuelve el resultado SIN el Coach, para
+// mostrarlo enseguida; el Coach se pide aparte a POST /meals/coach.
+// Sin el parámetro (versiones viejas de la app) responde todo junto, como antes.
 async function analyzeMeal(req, res) {
   if (!req.file) {
     return res.status(400).json({ error: 'Falta el archivo de imagen ("image").' });
@@ -38,32 +42,51 @@ async function analyzeMeal(req, res) {
   // (o si FatSecret falla), quedan los estimados por Gemini.
   analysis.ingredients = await verifyIngredients(analysis.ingredients);
 
-  const totals = sumIngredients(analysis.ingredients);
-  const feedback = await geminiService.generateCoachFeedback(
-    {
-      totalCalories: totals.totalCalories,
-      totalProteinG: totals.totalProteinG,
-      totalCarbsG: totals.totalCarbsG,
-      totalFatG: totals.totalFatG,
-      dishName: analysis.dishName,
-      ingredients: analysis.ingredients,
-    },
-    req.user,
-    await getTodayIntake(req.user.id),
-  );
+  // La foto se analizó bien: cuenta como escaneo del día (también si después
+  // no la guarda, porque la IA ya se usó). Se registra para todos los planes.
+  if (!analysis.mocked) {
+    await prisma.scanLog.create({ data: { userId: req.user.id } });
+  }
 
-  res.status(200).json({
+  const totals = sumIngredients(analysis.ingredients);
+  const result = {
     dishName: analysis.dishName,
     ingredients: analysis.ingredients,
     totals,
+    mocked: analysis.mocked,
+  };
+
+  if (req.query.deferCoach === '1') {
+    return res.status(200).json({ ...result, coachPending: true });
+  }
+
+  const coach = await coachForPlan(
+    { ...totals, dishName: analysis.dishName, ingredients: analysis.ingredients },
+    req.user,
+  );
+  res.status(200).json({ ...result, ...coach });
+}
+
+// Coach según el plan: COMPLETO para Pro (o Premium por código) y BREVE para el
+// plan Gratuito. Si la IA no responde, el servicio devuelve la versión con reglas.
+async function coachForPlan(meal, user) {
+  const premium = isPremiumUser(user);
+  const feedback = await geminiService.generateCoachFeedback(
+    meal,
+    user,
+    await getTodayIntake(user.id),
+    { brief: !premium },
+  );
+  return {
     coachFeedback: {
       summary: feedback.summary,
       tips: feedback.tips || [],
       alignment: feedback.alignment || 'ON_TRACK',
     },
-    mocked: analysis.mocked,
     coachMocked: Boolean(feedback.mocked),
-  });
+    // BRIEF = Coach breve del plan Gratuito (la app muestra la invitación a Pro).
+    coachLevel: premium ? 'FULL' : 'BRIEF',
+  };
 }
 
 // POST /api/meals  (multipart/form-data: "image" + "name" + "ingredients" + "coachFeedback" [+ "source" desde mobile])
@@ -73,10 +96,9 @@ async function createMeal(req, res) {
     return res.status(400).json({ error: 'Falta el archivo de imagen ("image").' });
   }
 
-  // Se vuelve a chequear el límite acá — nunca confiamos en que el
-  // cliente haya respetado el bloqueo del paso anterior.
-  const limitError = await checkFreePlanLimit(req.user);
-  if (limitError) return res.status(403).json(limitError);
+  // El límite diario se controla al ANALIZAR la foto (ahí se usa la IA y se
+  // registra el escaneo). Guardar no vuelve a descontar: si no, la tercera foto
+  // analizada del día no se podría guardar.
 
   const name = typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 120) : '';
   if (!name) {
@@ -84,10 +106,10 @@ async function createMeal(req, res) {
   }
 
   let ingredients;
-  let coachFeedback;
+  let coachFeedback = null;
   try {
     ingredients = JSON.parse(req.body.ingredients);
-    coachFeedback = JSON.parse(req.body.coachFeedback);
+    if (req.body.coachFeedback) coachFeedback = JSON.parse(req.body.coachFeedback);
   } catch {
     return res.status(400).json({ error: 'Datos de ingredientes o devolución del coach inválidos.' });
   }
@@ -103,6 +125,16 @@ async function createMeal(req, res) {
   const imageUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
   // Recalculamos los totales a partir de los ingredientes recibidos.
   const totals = sumIngredients(ingredients);
+
+  // Si se guarda sin devolución del Coach (por ejemplo, la IA no respondió),
+  // se usa la versión calculada con reglas: no se vuelve a llamar a la IA.
+  if (!coachFeedback || !String(coachFeedback.summary || '').trim()) {
+    coachFeedback = geminiService.buildBasicCoachFeedback(
+      { ...totals, name },
+      req.user,
+      await getTodayIntake(req.user.id),
+    );
+  }
 
   const meal = await prisma.meal.create({
     data: {
@@ -182,20 +214,86 @@ async function regenerateCoach(req, res) {
   const totals = sumIngredients(ingredients);
   const dishName = typeof req.body.dishName === 'string' ? req.body.dishName.trim().slice(0, 120) : '';
 
-  const feedback = await geminiService.generateCoachFeedback(
-    { ...totals, dishName, ingredients },
-    req.user,
-    await getTodayIntake(req.user.id),
-  );
+  res.json(await coachForPlan({ ...totals, dishName, ingredients }, req.user));
+}
 
-  res.json({
-    coachFeedback: {
-      summary: feedback.summary,
-      tips: feedback.tips || [],
-      alignment: feedback.alignment || 'ON_TRACK',
-    },
-    coachMocked: Boolean(feedback.mocked),
+// POST /api/meals/:id/repeat  { portions }
+// "Registrar de nuevo": copia una comida propia al día de hoy (con la hora
+// actual), escalando las porciones. No usa la IA de visión ni cuenta como
+// escaneo; sí genera la devolución del Coach según el plan, con el día de hoy.
+async function repeatMeal(req, res) {
+  const original = await prisma.meal.findFirst({
+    where: { id: req.params.id, userId: req.user.id },
+    include: { ingredients: true },
   });
+  if (!original) return res.status(404).json({ error: 'Plato no encontrado.' });
+
+  const factor = Number(req.body.portions) || 1;
+  const round1 = (n) => Math.round((Number(n) || 0) * factor * 10) / 10;
+
+  const ingredients = original.ingredients.map((ing) => ({
+    name: ing.name,
+    grams: round1(ing.grams),
+    calories: round1(ing.calories),
+    proteinG: round1(ing.proteinG),
+    carbsG: round1(ing.carbsG),
+    fatG: round1(ing.fatG),
+    source: ing.source,
+    fatSecretFoodId: ing.fatSecretFoodId,
+  }));
+
+  // Una comida sin ingredientes (no debería pasar) se escala por sus totales.
+  const totals = ingredients.length
+    ? sumIngredients(ingredients)
+    : {
+      totalCalories: round1(original.totalCalories),
+      totalProteinG: round1(original.totalProteinG),
+      totalCarbsG: round1(original.totalCarbsG),
+      totalFatG: round1(original.totalFatG),
+    };
+
+  const name = original.name || 'Comida repetida';
+  const coach = await coachForPlan({ ...totals, dishName: name, ingredients }, req.user);
+
+  const meal = await prisma.meal.create({
+    data: {
+      userId: req.user.id,
+      name,
+      imageUrl: original.imageUrl,
+      source: 'REPEAT',
+      status: 'ANALYZED',
+      ...totals,
+      ingredients: { create: ingredients },
+      coachFeedback: { create: coach.coachFeedback },
+    },
+    include: { ingredients: true, coachFeedback: true },
+  });
+
+  logger.info(`Meal ${meal.id} repetido de ${original.id} (x${factor}) para user ${req.user.id}`);
+  res.status(201).json({ meal, coachLevel: coach.coachLevel, coachMocked: coach.coachMocked });
+}
+
+// GET /api/meals/recent
+// Comidas recientes para "Registrar de nuevo" desde el escáner: liviano (sin
+// fotos ni ingredientes) y sin nombres repetidos.
+async function recentMeals(req, res) {
+  const rows = await prisma.meal.findMany({
+    where: { userId: req.user.id },
+    orderBy: { loggedAt: 'desc' },
+    take: 40,
+    select: { id: true, name: true, totalCalories: true, loggedAt: true },
+  });
+
+  const seen = new Set();
+  const meals = [];
+  for (const m of rows) {
+    const key = (m.name || '').trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    meals.push(m);
+    if (meals.length >= 8) break;
+  }
+  res.json({ meals });
 }
 
 // Suma lo que el usuario ya guardó hoy (antes del plato que se está
@@ -224,13 +322,9 @@ async function getTodayIntake(userId) {
 async function checkFreePlanLimit(user) {
   if (isPremiumUser(user)) return null; // plan pago o código de nutricionista vigente
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
-  // Las comidas registradas desde una receta no cuentan como escaneo.
-  const scansToday = await prisma.meal.count({
-    where: { userId: user.id, loggedAt: { gte: startOfDay }, source: { not: 'RECIPE' } },
-  });
+  // Cuentan las fotos analizadas hoy (ScanLog); repetir una comida o
+  // registrarla desde una receta no gasta escaneos.
+  const scansToday = await countScansToday(user.id);
 
   if (scansToday >= FREE_DAILY_SCAN_LIMIT) {
     return {
@@ -249,7 +343,8 @@ async function getMeal(req, res) {
   });
 
   if (!meal) return res.status(404).json({ error: 'Plato no encontrado.' });
-  res.json({ meal });
+  // Para mostrar (o no) la invitación al Coach completo de Pro en el detalle.
+  res.json({ meal, viewerIsPremium: isPremiumUser(req.user) });
 }
 
 // DELETE /api/meals/:id
@@ -262,5 +357,5 @@ async function deleteMeal(req, res) {
 }
 
 module.exports = {
-  analyzeMeal, createMeal, getMeal, deleteMeal, ingredientNutrition, regenerateCoach,
+  analyzeMeal, createMeal, getMeal, deleteMeal, ingredientNutrition, regenerateCoach, repeatMeal, recentMeals,
 };
