@@ -326,6 +326,19 @@ img { max-width: 100%; }
 .coach-card__title { font-size: 1rem; font-weight: 800; }
 .coach-card__pill { border-radius: 999px; padding: 3px 10px; font-size: 0.72rem; font-weight: 800; }
 .coach-card__note { margin: 0; font-size: 0.8rem; color: var(--color-ink-soft); font-style: italic; }
+.coach-card.is-pending { opacity: 0.9; }
+.coach-card__spinner {
+  width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--color-primary-soft);
+  border-top-color: var(--color-primary); animation: coach-spin 0.8s linear infinite;
+}
+@keyframes coach-spin { to { transform: rotate(360deg); } }
+.coach-card__upsell { margin-top: 6px; padding-top: 10px; border-top: 1px solid rgba(14, 122, 58, 0.15); display: flex; flex-direction: column; gap: 8px; }
+.coach-card__upsell p { margin: 0; font-size: 0.8rem; color: var(--color-ink-soft); line-height: 1.45; }
+.coach-card__upsell-btn {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+  background: var(--color-accent, #D9A02C); color: #fff; font-weight: 800; font-size: 0.8rem;
+  border-radius: 999px; padding: 7px 12px;
+}
 .coach-card__summary { margin: 0; font-size: 0.93rem; line-height: 1.5; }
 .coach-card__tips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .coach-card__tips li { display: flex; gap: 9px; font-size: 0.87rem; line-height: 1.45; }
