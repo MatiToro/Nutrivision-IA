@@ -85,6 +85,9 @@ model User {
   subscriptions Subscription[]
   payments      Payment[]
 
+  // Análisis de fotos con IA (para el límite diario del plan Gratuito)
+  scanLogs      ScanLog[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -163,6 +166,20 @@ enum MealSource {
   MOBILE_CAMERA
   MOBILE_GALLERY
   RECIPE          // "Registrar como comida de hoy" desde una receta (no cuenta como escaneo)
+  REPEAT          // "Registrar de nuevo" una comida anterior (no cuenta como escaneo)
+}
+
+// Un registro por cada foto analizada con IA (POST /meals/analyze exitoso).
+// El límite diario del plan Gratuito cuenta estos registros, no las comidas
+// guardadas: las comidas repetidas o desde recetas no gastan escaneos, y
+// analizar una foto sin guardarla sí cuenta (ya se usó la IA).
+model ScanLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 enum MealStatus {
