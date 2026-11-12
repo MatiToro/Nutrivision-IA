@@ -343,8 +343,12 @@ function r0(n) {
  * @param {object} meal   { dishName, ingredients[], totalCalories, totalProteinG, totalCarbsG, totalFatG }
  * @param {object} user   usuario de Prisma (goal + metas diarias)
  * @param {object} [today] { mealsCount, totalCalories, totalProteinG, totalCarbsG, totalFatG }
+ * @param {object} [options]
+ * @param {boolean} [options.brief] Coach BREVE (plan Gratuito): 1 frase + 1 consejo, con
+ *   instrucciones más cortas y sin las reglas detalladas por objetivo. Cuesta mucho menos.
+ *   Sin brief: Coach COMPLETO (Pro), con reglas por objetivo y 2-3 consejos.
  */
-async function generateCoachFeedback(meal, user, today = null) {
+async function generateCoachFeedback(meal, user, today = null, { brief = false } = {}) {
   if (!env.gemini.isConfigured) {
     return buildMockCoachFeedback(meal, user, today);
   }
@@ -366,7 +370,7 @@ ${afterCalories <= user.dailyCalorieGoal
     : `Con este plato se pasaría de su meta diaria por ${r0(afterCalories - user.dailyCalorieGoal)} kcal.`}`
     : 'El usuario todavía no tiene metas diarias definidas.';
 
-  const prompt = `Sos un coach nutricional breve y directo, con tono motivador y cercano (no clínico),
+  const prompt = brief ? buildBriefCoachPrompt(meal, user, ingredientList, dayBlock) : `Sos un coach nutricional breve y directo, con tono motivador y cercano (no clínico),
 en español rioplatense. No des diagnósticos médicos ni juzgues a la persona: evaluás el plato.
 
 PLATO A EVALUAR: ${meal.dishName || 'sin nombre'}
@@ -400,7 +404,7 @@ Devolvé:
     });
     return {
       summary: String(parsed.summary || '').slice(0, 2000),
-      tips: Array.isArray(parsed.tips) ? parsed.tips.map(String).slice(0, 5) : [],
+      tips: Array.isArray(parsed.tips) ? parsed.tips.map(String).slice(0, brief ? 1 : 5) : [],
       alignment: ['ON_TRACK', 'NEEDS_ADJUSTMENT', 'OFF_TRACK'].includes(parsed.alignment)
         ? parsed.alignment
         : 'ON_TRACK',
@@ -499,6 +503,25 @@ const MOCK_PLATES = [
   },
 ];
 
+// Instrucciones del Coach BREVE (plan Gratuito): mismo contexto de números,
+// pero sin las reglas detalladas por objetivo y con una respuesta mínima
+// (menos tokens de entrada y, sobre todo, de salida, que es lo más caro).
+function buildBriefCoachPrompt(meal, user, ingredientList, dayBlock) {
+  return `Sos un coach nutricional, en español rioplatense, con tono cercano y motivador.
+No des diagnósticos médicos ni juzgues a la persona.
+
+Plato: ${meal.dishName || 'sin nombre'}
+${ingredientList}
+Totales: ${r0(meal.totalCalories)} kcal, ${r0(meal.totalProteinG)} g proteína, ${r0(meal.totalCarbsG)} g carbohidratos, ${r0(meal.totalFatG)} g grasas.
+Objetivo del usuario: ${GOAL_LABELS[user.goal] || 'sin definir'}.
+${dayBlock}
+
+Devolvé:
+- summary: UNA sola frase corta (máx. 25 palabras) evaluando el plato para su objetivo y su día.
+- tips: exactamente 1 consejo corto y accionable (máx. 15 palabras).
+- alignment: ON_TRACK, NEEDS_ADJUSTMENT u OFF_TRACK.`;
+}
+
 function buildMockAnalysis() {
   const plate = MOCK_PLATES[Math.floor(Math.random() * MOCK_PLATES.length)];
   return {
@@ -542,6 +565,8 @@ function buildMockCoachFeedback(meal, user, today = null) {
 module.exports = {
   analyzeMealImage,
   generateCoachFeedback,
+  // Devolución calculada con reglas (sin IA): respaldo si Gemini no responde.
+  buildBasicCoachFeedback: buildMockCoachFeedback,
   estimateIngredientNutrition,
   // Usado por el generador de recetas (services/recipeAi.service.js)
   generateWithFallback,
