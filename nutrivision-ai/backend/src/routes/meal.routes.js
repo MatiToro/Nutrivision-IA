@@ -63,6 +63,9 @@ router.post(
 // Comidas recientes (sin fotos) para "Registrar de nuevo" desde el escáner.
 router.get('/recent', mealController.recentMeals);
 
+// Aviso de Inicio: comentarios nuevos del nutricionista sin abrir.
+router.get('/comments/unseen', mealController.unseenComments);
+
 // "Registrar de nuevo": copia una comida al día de hoy. No usa la IA de visión
 // ni cuenta como escaneo; genera la devolución del Coach según el plan.
 router.post(
