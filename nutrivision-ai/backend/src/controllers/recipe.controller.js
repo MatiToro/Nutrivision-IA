@@ -195,9 +195,11 @@ async function suggest(req, res) {
   });
 }
 
-// GET /api/recipes/:key → detalle (las de FatSecret se piden y traducen acá)
+// GET /api/recipes/:key → detalle. Las de FatSecret se piden y traducen acá, y
+// las de IA resumidas se completan acá (cantidades y pasos) la primera vez.
 async function getRecipe(req, res) {
-  const recipe = await recipes.findRecipe(req.user.id, req.params.key);
+  const found = await recipes.findRecipe(req.user.id, req.params.key);
+  const recipe = await recipes.completeAiRecipe(req.user.id, found);
   if (!recipe) {
     return res.status(404).json({
       error: req.params.key.startsWith('ai-')
@@ -266,6 +268,7 @@ async function unsaveRecipe(req, res) {
 
 // POST /api/recipes/log { key, portions } → "Registrar como comida de hoy"
 // Los valores salen de la receta guardada en el servidor, no del teléfono.
+// (Sirve también con una receta de IA resumida: los macros ya están.)
 async function logRecipe(req, res) {
   const user = req.user;
   const portions = Number(req.body.portions);
