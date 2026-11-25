@@ -339,12 +339,61 @@ async function checkFreePlanLimit(user) {
 async function getMeal(req, res) {
   const meal = await prisma.meal.findFirst({
     where: { id: req.params.id, userId: req.user.id },
-    include: { ingredients: true, coachFeedback: true },
+    include: {
+      ingredients: true,
+      coachFeedback: true,
+      nutritionistComment: { include: { nutritionist: { include: { user: { select: { displayName: true } } } } } },
+    },
   });
 
   if (!meal) return res.status(404).json({ error: 'Plato no encontrado.' });
-  // Para mostrar (o no) la invitación al Coach completo de Pro en el detalle.
-  res.json({ meal, viewerIsPremium: isPremiumUser(req.user) });
+
+  // Comentario de su nutricionista: al abrir la comida queda como visto
+  // (deja de aparecer el aviso en Inicio).
+  const c = meal.nutritionistComment;
+  if (c && !c.seenAt) {
+    await prisma.mealComment.update({ where: { id: c.id }, data: { seenAt: new Date() } });
+  }
+  const { nutritionistComment, ...rest } = meal;
+  res.json({
+    meal: {
+      ...rest,
+      nutritionistComment: c
+        ? { text: c.text, author: c.nutritionist?.user?.displayName || 'Tu nutricionista', updatedAt: c.updatedAt }
+        : null,
+    },
+    // Para mostrar (o no) la invitación al Coach completo de Pro en el detalle.
+    viewerIsPremium: isPremiumUser(req.user),
+  });
+}
+
+// GET /api/meals/comments/unseen
+// Aviso de Inicio: comentarios nuevos del nutricionista que el paciente todavía
+// no abrió. Devuelve cuántos son y el más reciente (para ir directo a esa comida).
+async function unseenComments(req, res) {
+  const where = { seenAt: null, meal: { userId: req.user.id } };
+  const [count, latest] = await Promise.all([
+    prisma.mealComment.count({ where }),
+    prisma.mealComment.findFirst({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        meal: { select: { id: true, name: true } },
+        nutritionist: { include: { user: { select: { displayName: true } } } },
+      },
+    }),
+  ]);
+  res.json({
+    count,
+    latest: latest
+      ? {
+        mealId: latest.meal.id,
+        mealName: latest.meal.name || 'tu comida',
+        author: latest.nutritionist?.user?.displayName || 'Tu nutricionista',
+        text: latest.text.slice(0, 140),
+      }
+      : null,
+  });
 }
 
 // DELETE /api/meals/:id
@@ -357,5 +406,5 @@ async function deleteMeal(req, res) {
 }
 
 module.exports = {
-  analyzeMeal, createMeal, getMeal, deleteMeal, ingredientNutrition, regenerateCoach, repeatMeal, recentMeals,
+  analyzeMeal, createMeal, getMeal, deleteMeal, ingredientNutrition, regenerateCoach, repeatMeal, recentMeals, unseenComments,
 };
