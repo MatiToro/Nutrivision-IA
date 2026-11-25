@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Check, ChevronRight, Copy, KeyRound, RefreshCw, Users } from 'lucide-react';
+import { AlertTriangle, Check, ChevronRight, Clock, Copy, KeyRound, RefreshCw, Users } from 'lucide-react';
 import apiClient from '../../api/client';
 import { Avatar, useConfirm } from '../../components/roles';
 import { EmptyState, Message, PageTitle, SectionHeader } from '../../components/ui';
@@ -154,6 +154,7 @@ export default function NutriPatientsPage() {
         }
         .nutri-code__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .nutri-code__actions .btn { padding-left: 10px; padding-right: 10px; white-space: nowrap; }
+        .nutri-patient__inactive { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; }
         .nutri-patient__track { height: 6px; border-radius: 3px; background: var(--color-bg); overflow: hidden; margin: 3px 0; }
         .nutri-patient__fill { height: 100%; border-radius: 3px; background: var(--color-primary); }
         .nutri-patient__fill.is-over { background: var(--color-accent); }
@@ -171,6 +172,12 @@ function PatientRow({ p }) {
       <Avatar src={p.photoUrl} name={p.name} size={48} />
       <span className="role-list-item__body">
         <span className="role-list-item__name">{p.name}</span>
+        {/* Paciente inactivo: el backend lo marca desde los 3 días sin registrar y lo ordena primero. */}
+        {p.inactiveDays ? (
+          <span className="role-tag role-tag--gold nutri-patient__inactive">
+            <Clock size={12} /> Sin registros hace {p.inactiveDays} días
+          </span>
+        ) : null}
         <span className="role-list-item__meta">{goal?.label || 'Sin objetivo'}{p.weightKg ? ` · ${String(p.weightKg).replace('.', ',')} kg` : ''}</span>
         <span className="nutri-patient__track"><span className={`nutri-patient__fill${over ? ' is-over' : ''}`} style={{ width: `${pct * 100}%`, display: 'block' }} /></span>
         <span className="role-list-item__meta">

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Crown, History, Pencil, Target, UserMinus, Utensils } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crown, History, MessageSquare, Pencil, Target, UserMinus, Utensils } from 'lucide-react';
 import apiClient from '../../api/client';
 import LoadingScreen from '../../components/LoadingScreen';
 import MacroBar from '../../components/MacroBar';
 import WeightChart from '../../components/WeightChart';
+import PatientNotes from '../../components/PatientNotes';
 import { Avatar, BackButton, Tag, WeekBars, useConfirm } from '../../components/roles';
 import { EmptyState, Message, PageTitle, SectionHeader } from '../../components/ui';
 import { ACTIVITY_OPTIONS, GOAL_OPTIONS, SEX_OPTIONS, findOption } from '../../constants/profile';
@@ -194,9 +195,13 @@ export default function NutriPatientPage() {
             </section>
           </div>
 
+          {/* Notas privadas (solo las ve el nutricionista) */}
+          <PatientNotes patientId={id} initialNotes={file.notes} />
+
           {/* Comidas del período */}
           <section className="card">
             <SectionHeader title={offset === 0 ? 'Comidas de los últimos 7 días' : 'Comidas de esa semana'} />
+            <p className="hint" style={{ marginTop: 0 }}>Hacé clic en una comida para verla y dejarle un comentario al paciente.</p>
             {meals === undefined ? null : meals.length === 0 ? (
               <EmptyState icon={<Utensils size={24} />} title="Sin comidas registradas" text="No registró platos en estos días." />
             ) : (
@@ -209,6 +214,8 @@ export default function NutriPatientPage() {
                       <span className="meal-row__name">{m.name || 'Comida'}</span>
                       <span className="hint">{longDate(d)}, {pad(d.getHours())}:{pad(d.getMinutes())} h</span>
                     </span>
+                    {/* Ya le dejaste un comentario a esta comida */}
+                    {m.hasComment ? <MessageSquare size={15} color="var(--color-primary)" aria-label="Comentada" /> : null}
                     <span className="meal-row__kcal">{Math.round(m.totalCalories || 0)} kcal</span>
                     <ChevronRight size={16} className="meal-row__chevron" />
                   </Link>
