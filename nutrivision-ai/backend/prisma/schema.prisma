@@ -70,6 +70,7 @@ model User {
   patientLinks        PatientLink[]
   reviews             Review[]
   redeemedCodes       PremiumCode[]
+  notesAboutMe        PatientNote[]   // notas privadas que escribió su nutricionista
   goalChanges         GoalChangeLog[] @relation("GoalChangeTarget")
   goalChangesMade     GoalChangeLog[] @relation("GoalChangeAuthor")
 
@@ -151,6 +152,7 @@ model Meal {
 
   aiRawResponse Json?     // respuesta cruda del modelo de visión, para auditoría/debug
   coachFeedback CoachFeedback?
+  nutritionistComment MealComment?   // comentario del nutricionista (uno por comida)
 
   ingredients Ingredient[]
 
@@ -280,6 +282,8 @@ model NutritionistProfile {
   reviews         Review[]
   premiumCodes    PremiumCode[]
   payments        NutritionistPayment[]
+  patientNotes    PatientNote[]
+  mealComments    MealComment[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -538,4 +542,36 @@ model Payment {
   createdAt             DateTime @default(now())
 
   @@index([userId, paidAt])
+}
+
+// Notas privadas del nutricionista sobre un paciente (el paciente nunca las ve).
+model PatientNote {
+  id             String   @id @default(uuid())
+  nutritionistId String
+  nutritionist   NutritionistProfile @relation(fields: [nutritionistId], references: [id], onDelete: Cascade)
+  patientId      String
+  patient        User     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  text           String   @db.Text
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([nutritionistId, patientId, createdAt])
+}
+
+// Comentario del nutricionista sobre una comida del paciente (uno por comida).
+// seenAt = cuándo lo abrió el paciente (null = aviso pendiente en Inicio).
+model MealComment {
+  id             String   @id @default(uuid())
+  mealId         String   @unique
+  meal           Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  nutritionistId String
+  nutritionist   NutritionistProfile @relation(fields: [nutritionistId], references: [id], onDelete: Cascade)
+  text           String   @db.Text
+  seenAt         DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([nutritionistId])
 }
