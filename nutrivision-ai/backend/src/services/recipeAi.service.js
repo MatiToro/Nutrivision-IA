@@ -4,10 +4,13 @@ const { generateWithFallback, GOAL_LABELS } = require('./gemini.service');
 
 // ------------------------------------------------------------------
 // IA para Recetas inteligentes:
-//  1) generateAiRecipes: crea recetas con lo que hay en la heladera y,
-//     en la misma llamada, traduce la heladera al inglés para buscar
-//     recetas en FatSecret (que está en inglés).
-//  2) translateFatSecretRecipes: traduce recetas de FatSecret al español.
+//  1) generateAiRecipes: propone recetas con lo que hay en la heladera, en
+//     versión RESUMIDA (nombre, descripción, tiempo, porciones, macros y solo
+//     los nombres de los ingredientes) para que la lista salga rápido. En la
+//     misma llamada traduce la heladera al inglés para buscar en FatSecret.
+//  2) generateAiRecipeDetail: completa UNA receta (cantidades y pasos) recién
+//     cuando el usuario la abre. Así no se generan pasos que nadie lee.
+//  3) translateFatSecretRecipes: traduce recetas de FatSecret al español.
 // Nunca se inventan datos si la IA no está configurada.
 // ------------------------------------------------------------------
 
@@ -20,6 +23,16 @@ const INGREDIENT = {
     pantry: { type: 'BOOLEAN' }, // básico de despensa (sal, aceite, agua...)
   },
   required: ['text', 'name', 'quantity', 'pantry'],
+};
+
+// Ingrediente en la lista resumida: alcanza para el "tengo / falta".
+const LIST_INGREDIENT = {
+  type: 'OBJECT',
+  properties: {
+    name: { type: 'STRING' },
+    pantry: { type: 'BOOLEAN' },
+  },
+  required: ['name', 'pantry'],
 };
 
 const MACROS = {
@@ -46,16 +59,24 @@ const AI_RECIPES_SCHEMA = {
           prepMinutes: { type: 'NUMBER' },
           servings: { type: 'NUMBER' },
           perServing: MACROS,
-          ingredients: { type: 'ARRAY', items: INGREDIENT },
-          steps: { type: 'ARRAY', items: { type: 'STRING' } },
+          ingredients: { type: 'ARRAY', items: LIST_INGREDIENT },
         },
-        required: ['name', 'description', 'prepMinutes', 'servings', 'perServing', 'ingredients', 'steps'],
+        required: ['name', 'description', 'prepMinutes', 'servings', 'perServing', 'ingredients'],
       },
     },
     fridgeEnglish: { type: 'ARRAY', items: { type: 'STRING' } },
     searchTerms: { type: 'ARRAY', items: { type: 'STRING' } },
   },
   required: ['recipes', 'fridgeEnglish', 'searchTerms'],
+};
+
+const DETAIL_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    ingredients: { type: 'ARRAY', items: INGREDIENT },
+    steps: { type: 'ARRAY', items: { type: 'STRING' } },
+  },
+  required: ['ingredients', 'steps'],
 };
 
 const TRANSLATION_SCHEMA = {
@@ -149,10 +170,10 @@ Para cada receta:
 - prepMinutes: minutos totales (preparación + cocción).
 - servings: cantidad de porciones.
 - perServing: calorías (kcal), proteínas, carbohidratos y grasas (g) de UNA porción, con valores de tablas nutricionales estándar. Coherentes: calorías ≈ 4*proteína + 4*carbohidratos + 9*grasa.
-- ingredients: todos los ingredientes de la receta completa (también los que falten).
-- steps: pasos claros y breves, en orden (sin numerarlos).
-
-${INGREDIENT_RULES}
+- ingredients: todos los ingredientes de la receta completa (también los que falten), cada uno SOLO con:
+  - name: nombre corto y genérico en singular y en minúscula, sin cantidades ni marcas (ej. "huevo", "arroz", "pechuga de pollo").
+  - pantry: true SOLO para básicos de despensa (sal, pimienta, aceite, agua, azúcar, vinagre, especias y hierbas secas).
+No escribas cantidades ni pasos: se completan después, cuando el usuario abre la receta.
 
 Además:
 - fridgeEnglish: el nombre en inglés de cada alimento de la heladera, en el MISMO orden (una o dos palabras, ej. "egg", "chicken breast", "cheese").
@@ -172,6 +193,48 @@ Además:
     recipes: Array.isArray(parsed.recipes) ? parsed.recipes.slice(0, 5) : [],
     fridgeEnglish: Array.isArray(parsed.fridgeEnglish) ? parsed.fridgeEnglish.map((s) => String(s).toLowerCase().trim()).filter(Boolean) : [],
     searchTerms: Array.isArray(parsed.searchTerms) ? parsed.searchTerms.map((s) => String(s).trim()).filter(Boolean).slice(0, 3) : [],
+  };
+}
+
+/**
+ * Completa una receta de IA resumida: cantidades de cada ingrediente y pasos.
+ * Respeta los ingredientes, las porciones y los macros que ya se mostraron.
+ * @returns {Promise<{ingredients: Array, steps: string[]}>}
+ */
+async function generateAiRecipeDetail(recipe) {
+  if (!env.gemini.isConfigured) throw aiUnavailable();
+
+  const per = recipe.perServing || {};
+  const ingredientList = (recipe.ingredients || []).map((i, n) => `${n + 1}. ${i.name}${i.pantry ? ' (despensa)' : ''}`).join('\n');
+  const prompt = `Sos un cocinero y nutricionista argentino. Completá esta receta casera.
+
+RECETA: ${recipe.name}
+${recipe.description || ''}
+Porciones: ${recipe.servings || 1}. Tiempo total: ${recipe.prepMinutes ? `${recipe.prepMinutes} minutos` : 'a definir'}.
+Por porción: ${r0(per.calories)} kcal, ${r0(per.proteinG)} g de proteína, ${r0(per.carbsG)} g de carbohidratos, ${r0(per.fatG)} g de grasas.
+
+INGREDIENTES (usá exactamente estos, en este orden, sin agregar otros salvo básicos de despensa):
+${ingredientList}
+
+Devolvé:
+- ingredients: cada ingrediente con la cantidad para la receta completa, coherente con las porciones y los valores por porción.
+- steps: pasos claros y breves, en orden (sin numerarlos), que respeten el tiempo total.
+
+${INGREDIENT_RULES}`;
+
+  let parsed;
+  try {
+    parsed = await generateWithFallback({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, responseMimeType: 'application/json', responseSchema: DETAIL_SCHEMA },
+    });
+  } catch (err) {
+    throw friendlyAiError(err, 'preparar la receta');
+  }
+
+  return {
+    ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+    steps: Array.isArray(parsed.steps) ? parsed.steps : [],
   };
 }
 
@@ -222,4 +285,4 @@ ${JSON.stringify(input)}`;
   return out;
 }
 
-module.exports = { generateAiRecipes, translateFatSecretRecipes, MEAL_TYPE_LABELS };
+module.exports = { generateAiRecipes, generateAiRecipeDetail, translateFatSecretRecipes, MEAL_TYPE_LABELS };

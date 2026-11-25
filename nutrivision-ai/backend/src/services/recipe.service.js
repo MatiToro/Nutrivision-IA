@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const prisma = require('../config/prisma');
 const fatSecret = require('./fatsecret.service');
-const { translateFatSecretRecipes } = require('./recipeAi.service');
+const { translateFatSecretRecipes, generateAiRecipeDetail } = require('./recipeAi.service');
 const { normalizeFood } = require('../utils/foodName');
 
 // ------------------------------------------------------------------
@@ -65,8 +65,12 @@ function cleanMacros(m = {}) {
   };
 }
 
-/** Receta de IA → formato común. */
+/**
+ * Receta de IA → formato común. Las sugerencias nuevas llegan resumidas (sin
+ * cantidades ni pasos): detailed = false hasta que se abren (completeAiRecipe).
+ */
 function fromAi(r) {
+  const steps = (Array.isArray(r.steps) ? r.steps : []).slice(0, 30).map((s) => str(s, 600)).filter(Boolean);
   return {
     key: `ai-${crypto.randomUUID()}`,
     source: 'AI',
@@ -80,8 +84,8 @@ function fromAi(r) {
     servings: Math.max(1, Math.round(Number(r.servings) || 1)),
     perServing: cleanMacros(r.perServing),
     ingredients: (Array.isArray(r.ingredients) ? r.ingredients : []).slice(0, 40).map(cleanIngredient).filter((i) => i.name),
-    steps: (Array.isArray(r.steps) ? r.steps : []).slice(0, 30).map((s) => str(s, 600)).filter(Boolean),
-    detailed: true,
+    steps,
+    detailed: steps.length > 0,
   };
 }
 
@@ -190,6 +194,57 @@ async function findAiRecipe(userId, key) {
   return null;
 }
 
+// Detalles que se están generando ahora: si el usuario toca dos veces la misma
+// receta, la segunda espera a la primera en vez de llamar otra vez a la IA.
+const detailInFlight = new Map();
+
+/**
+ * Completa una receta de IA resumida (cantidades y pasos) la primera vez que
+ * se abre, y la deja guardada así en sus sugerencias y, si la guardó, en sus
+ * favoritas. Las que ya estaban completas se devuelven sin tocar.
+ */
+async function completeAiRecipe(userId, recipe) {
+  if (!recipe || recipe.source !== 'AI' || recipe.detailed) return recipe;
+  const flightKey = `${userId}:${recipe.key}`;
+  if (detailInFlight.has(flightKey)) return detailInFlight.get(flightKey);
+
+  const job = (async () => {
+    const detail = await generateAiRecipeDetail(recipe);
+    const ingredients = detail.ingredients.slice(0, 40).map(cleanIngredient).filter((i) => i.name);
+    const steps = detail.steps.slice(0, 30).map((s) => str(s, 600)).filter(Boolean);
+    const full = {
+      ...recipe,
+      // Si la IA no devolvió ingredientes, quedan los nombres que ya se mostraron.
+      ingredients: ingredients.length ? ingredients : recipe.ingredients,
+      steps,
+      detailed: steps.length > 0,
+    };
+    // Sin los campos calculados para la heladera actual (se recalculan al mostrar).
+    for (const k of ['haveCount', 'totalCount', 'missingCount', 'saved']) delete full[k];
+    full.ingredients = full.ingredients.map(({ have, ...rest }) => rest);
+
+    const rows = await prisma.recipeSuggestion.findMany({
+      where: { userId, createdAt: { gte: new Date(Date.now() - DAY_MS) } },
+      select: { id: true, recipes: true },
+    });
+    await Promise.all(rows
+      .filter((row) => Array.isArray(row.recipes) && row.recipes.some((r) => r.key === recipe.key))
+      .map((row) => prisma.recipeSuggestion.update({
+        where: { id: row.id },
+        data: { recipes: row.recipes.map((r) => (r.key === recipe.key ? full : r)) },
+      })));
+    await prisma.savedRecipe.updateMany({ where: { userId, recipeKey: recipe.key }, data: { data: full } });
+    return full;
+  })();
+
+  detailInFlight.set(flightKey, job);
+  try {
+    return await job;
+  } finally {
+    detailInFlight.delete(flightKey);
+  }
+}
+
 /** Cualquier receta por su key ("ai-..." o "fs-..."). */
 async function findRecipe(userId, key) {
   if (key.startsWith('fs-')) return getFatSecretDetail(key.slice(3));
@@ -207,5 +262,6 @@ module.exports = {
   getFatSecretDetail,
   findRecipe,
   findAiRecipe,
+  completeAiRecipe,
   DAY_MS,
 };
