@@ -60,6 +60,25 @@ router.patch(
   handleValidation,
   c.updatePatientGoals,
 );
+// Notas privadas sobre el paciente (solo las ve el nutricionista)
+const noteText = body('text').isString().trim().isLength({ min: 1, max: 2000 }).withMessage('La nota tiene que tener entre 1 y 2000 caracteres.');
+router.post('/patients/:id/notes', [param('id').isUUID(), noteText], handleValidation, c.createNote);
+router.patch('/patients/:id/notes/:noteId', [param('id').isUUID(), param('noteId').isUUID(), noteText], handleValidation, c.updateNote);
+router.delete('/patients/:id/notes/:noteId', [param('id').isUUID(), param('noteId').isUUID()], handleValidation, c.deleteNote);
+
+// Comentario sobre una comida del paciente (uno por comida; el paciente lo ve)
+router.put(
+  '/patients/:id/meals/:mealId/comment',
+  [
+    param('id').isUUID(),
+    param('mealId').isUUID(),
+    body('text').isString().trim().isLength({ min: 1, max: 500 }).withMessage('El comentario tiene que tener entre 1 y 500 caracteres.'),
+  ],
+  handleValidation,
+  c.upsertMealComment,
+);
+router.delete('/patients/:id/meals/:mealId/comment', [param('id').isUUID(), param('mealId').isUUID()], handleValidation, c.deleteMealComment);
+
 router.delete('/patients/:id', [param('id').isUUID()], handleValidation, c.removePatient);
 
 module.exports = router;
