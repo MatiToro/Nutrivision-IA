@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Camera, ChevronLeft, ChevronRight, History as HistoryIcon } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, History as HistoryIcon, MessageSquare } from 'lucide-react';
 import apiClient from '../api/client';
 import { EmptyState, Message, PageTitle } from '../components/ui';
 import { addDays, longDate, mondayOf, sameDay, shortDay, startOfDay } from '../utils/dates';
@@ -131,7 +131,15 @@ export default function HistoryPage() {
             <Link to={`/meals/${meal.id}`} key={meal.id} className="meal-row">
               {meal.imageUrl ? <img src={meal.imageUrl} alt="" className="meal-row__thumb history-page__thumb" /> : null}
               <span className="meal-row__body">
-                <span className="meal-row__name">{meal.name || mealTypeFromTime(meal.loggedAt)}</span>
+                <span className="meal-row__name">
+                  {meal.name || mealTypeFromTime(meal.loggedAt)}
+                  {/* Comentario de su nutricionista (punto = todavía no lo abrió) */}
+                  {meal.hasComment ? (
+                    <span className={`history-page__comment${meal.commentUnseen ? ' is-new' : ''}`} title="Comentario de tu nutricionista">
+                      <MessageSquare size={14} />
+                    </span>
+                  ) : null}
+                </span>
                 <span className="history-page__time">
                   {new Date(meal.loggedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })} h
                 </span>
@@ -179,6 +187,10 @@ export default function HistoryPage() {
         .history-page__summary-item strong { display: block; font-size: 1.2rem; font-weight: 800; }
         .history-page__summary-item span { display: block; font-size: 0.74rem; color: var(--color-ink-soft); font-weight: 600; margin-top: 2px; }
         .history-page__meals { padding: 8px 14px; }
+        .history-page__comment { position: relative; display: inline-flex; margin-left: 6px; color: var(--color-primary); vertical-align: middle; }
+        .history-page__comment.is-new::after {
+          content: ''; position: absolute; top: -2px; right: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--color-danger);
+        }
         .history-page__thumb { width: 56px; height: 56px; border-radius: 14px; }
         .history-page__time { display: block; font-size: 0.78rem; color: var(--color-ink-soft); font-weight: 600; }
       `}

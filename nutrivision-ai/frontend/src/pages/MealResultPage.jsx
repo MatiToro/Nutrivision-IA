@@ -5,6 +5,7 @@ import apiClient from "../api/client";
 import LoadingScreen from "../components/LoadingScreen";
 import { useAuth } from "../context/AuthContext";
 import { CoachCard, MacroTotals, Message, PageTitle } from "../components/ui";
+import { NutriCommentEditor, NutritionistCommentCard } from "../components/MealComment";
 
 // Porciones al repetir una comida (1 = igual que la original).
 const PORTIONS = [
@@ -140,6 +141,8 @@ export default function MealResultPage() {
 
         <div className="meal-detail__main">
           {repeatFirst ? repeatCard : null}
+          {/* Paciente: comentario de su nutricionista arriba de todo (se llega desde el aviso de Inicio). */}
+          {!patientId ? <NutritionistCommentCard comment={meal.nutritionistComment} /> : null}
           <section className="card">
             <div className="section-header"><h3>Ingredientes estimados</h3></div>
             {meal.ingredients.length === 0 ? (
@@ -165,6 +168,8 @@ export default function MealResultPage() {
             )}
           </section>
 
+          {/* Nutricionista: escribe (o cambia) su comentario sobre esta comida. */}
+          {patientId ? <NutriCommentEditor patientId={patientId} mealId={meal.id} initial={meal.nutritionistComment} /> : null}
           <CoachCard feedback={meal.coachFeedback} upsell={!patientId && !viewerIsPremium} />
           {!repeatFirst ? repeatCard : null}
         </div>

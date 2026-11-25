@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Camera, ArrowRight, Sparkles, Utensils, ChevronRight, Smartphone, Apple, PlayCircle, BarChart3 } from 'lucide-react';
+import { Camera, ArrowRight, Sparkles, Utensils, ChevronRight, Smartphone, Apple, PlayCircle, BarChart3, MessageSquare } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import DayDetailModal from '../components/DayDetailModal';
@@ -19,6 +19,8 @@ export default function DashboardPage() {
   const [selectedDay, setSelectedDay] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Aviso: comentario nuevo de su nutricionista (desaparece al abrir esa comida).
+  const [commentNotice, setCommentNotice] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -32,6 +34,11 @@ export default function DashboardPage() {
           apiClient.get(`/history/meals?from=${startOfDay.toISOString()}`),
           apiClient.get(`/history/meals?from=${monday.toISOString()}`),
         ]);
+
+        // El aviso de comentarios es aparte: si falla, el panel igual carga.
+        apiClient.get('/meals/comments/unseen')
+          .then(({ data }) => setCommentNotice(data.count ? data : null))
+          .catch(() => {});
 
         setSummary(summaryRes.data);
         setTodayMeals(todayRes.data.meals);
@@ -76,6 +83,20 @@ export default function DashboardPage() {
       </div>
 
       {error && <Message>{error}</Message>}
+
+      {commentNotice?.latest ? (
+        <Link to={`/meals/${commentNotice.latest.mealId}`} className="card dashboard__comment">
+          <span className="icon-tile"><MessageSquare size={18} /></span>
+          <span className="dashboard__comment-body">
+            <strong>{commentNotice.latest.author} comentó tu comida «{commentNotice.latest.mealName}»</strong>
+            <span>“{commentNotice.latest.text}”</span>
+            {commentNotice.count > 1 ? (
+              <span>Y {commentNotice.count - 1} {commentNotice.count - 1 === 1 ? 'comentario más' : 'comentarios más'} en tu historial.</span>
+            ) : null}
+          </span>
+          <span className="dashboard__comment-cta">Ver comentario <ArrowRight size={16} /></span>
+        </Link>
+      ) : null}
 
       <div className="dashboard__top">
         {/* Progreso del día */}
@@ -243,6 +264,13 @@ export default function DashboardPage() {
       <style>{`
         .dashboard__intro h1 { margin: 0; }
         .dashboard__intro p { margin: 2px 0 0; color: var(--color-ink-soft); font-size: 0.92rem; }
+        .dashboard__comment {
+          display: flex; align-items: center; gap: 14px; text-decoration: none; color: inherit;
+          background: var(--color-primary-soft); padding: 14px 18px; flex-wrap: wrap;
+        }
+        .dashboard__comment-body { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px; }
+        .dashboard__comment-body span { font-size: 0.85rem; color: var(--color-ink-soft); }
+        .dashboard__comment-cta { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--color-primary); font-size: 0.9rem; }
 
         .dashboard__top { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; align-items: stretch; }
         @media (max-width: 960px) { .dashboard__top { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
