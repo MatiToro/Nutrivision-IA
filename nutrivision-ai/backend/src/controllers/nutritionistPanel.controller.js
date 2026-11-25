@@ -13,6 +13,10 @@ const {
 const SUBSCRIPTION_DAYS = 30;
 const PREMIUM_CODES_PER_MONTH = 5;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Aviso de paciente inactivo: días seguidos sin registrar comidas.
+const INACTIVE_DAYS = 3;
+// Notas privadas por paciente (tope para que la ficha no se haga eterna).
+const MAX_NOTES = 100;
 
 const PROFILE_FIELDS = ['bio', 'specialties', 'contactWhatsapp', 'contactEmail', 'contactInstagram', 'contactOther'];
 
@@ -287,9 +291,17 @@ async function listPatients(req, res) {
   ]) : [[], []];
   const today = new Map(todayRows.map((r) => [r.userId, r]));
   const last = new Map(lastRows.map((r) => [r.userId, r._max.loggedAt]));
+  const now = Date.now();
 
-  res.json({
-    patients: links.map((l) => ({
+  // Días sin registrar comidas (si nunca registró, desde que se vinculó).
+  const inactiveDaysOf = (l) => {
+    const since = last.get(l.patientId) || l.createdAt;
+    return Math.floor((now - new Date(since).getTime()) / DAY_MS);
+  };
+
+  const patients = links.map((l) => {
+    const days = inactiveDaysOf(l);
+    return {
       id: l.patient.id,
       name: l.patient.displayName || 'Paciente',
       photoUrl: l.patient.photoUrl,
@@ -302,8 +314,14 @@ async function listPatients(req, res) {
         calorieGoal: l.patient.dailyCalorieGoal,
       },
       lastMealAt: last.get(l.patientId) || null,
-    })),
+      // Aviso "Sin registros hace X días" (desde INACTIVE_DAYS días).
+      inactiveDays: days >= INACTIVE_DAYS ? days : null,
+    };
   });
+  // Primero los inactivos (los de más días arriba); el resto, como estaba.
+  patients.sort((a, b) => (b.inactiveDays || 0) - (a.inactiveDays || 0));
+
+  res.json({ patients, inactiveAfterDays: INACTIVE_DAYS });
 }
 
 // GET /api/nutritionist/patients/:id
@@ -316,8 +334,14 @@ async function getPatient(req, res) {
   if (!link) return;
   const p = link.patient;
 
-  const [weightLogs, goalChanges] = await Promise.all([
+  const [weightLogs, goalChanges, notes] = await Promise.all([
     prisma.weightLog.findMany({ where: { userId: p.id }, orderBy: { loggedAt: 'asc' }, take: 90 }),
+    // Notas privadas del nutricionista (el paciente no las ve).
+    prisma.patientNote.findMany({
+      where: { nutritionistId: profile.id, patientId: p.id },
+      orderBy: { createdAt: 'desc' },
+      take: MAX_NOTES,
+    }),
     prisma.goalChangeLog.findMany({
       where: { userId: p.id },
       orderBy: { createdAt: 'desc' },
@@ -351,7 +375,48 @@ async function getPatient(req, res) {
       createdAt: g.createdAt,
       by: g.changedById === req.user.id ? 'YOU' : g.changedById === p.id ? 'PATIENT' : 'OTHER',
     })),
+    notes: notes.map(publicNote),
   });
+}
+
+const publicNote = (n) => ({ id: n.id, text: n.text, createdAt: n.createdAt, updatedAt: n.updatedAt });
+
+// POST /api/nutritionist/patients/:id/notes  { text }
+async function createNote(req, res) {
+  const profile = await requirePanelAccess(req, res);
+  if (!profile) return;
+  const link = await findPatient(profile, req.params.id, res);
+  if (!link) return;
+
+  const count = await prisma.patientNote.count({ where: { nutritionistId: profile.id, patientId: link.patientId } });
+  if (count >= MAX_NOTES) {
+    return res.status(409).json({ error: `Podés tener hasta ${MAX_NOTES} notas por paciente. Borrá alguna para agregar otra.` });
+  }
+  const note = await prisma.patientNote.create({
+    data: { nutritionistId: profile.id, patientId: link.patientId, text: req.body.text.trim() },
+  });
+  res.status(201).json({ note: publicNote(note) });
+}
+
+// PATCH /api/nutritionist/patients/:id/notes/:noteId  { text }
+async function updateNote(req, res) {
+  const profile = await requirePanelAccess(req, res);
+  if (!profile) return;
+  const where = { id: req.params.noteId, nutritionistId: profile.id, patientId: req.params.id };
+  const { count } = await prisma.patientNote.updateMany({ where, data: { text: req.body.text.trim() } });
+  if (!count) return res.status(404).json({ error: 'No encontramos esa nota.' });
+  res.json({ note: publicNote(await prisma.patientNote.findUnique({ where: { id: req.params.noteId } })) });
+}
+
+// DELETE /api/nutritionist/patients/:id/notes/:noteId
+async function deleteNote(req, res) {
+  const profile = await requirePanelAccess(req, res);
+  if (!profile) return;
+  const { count } = await prisma.patientNote.deleteMany({
+    where: { id: req.params.noteId, nutritionistId: profile.id, patientId: req.params.id },
+  });
+  if (!count) return res.status(404).json({ error: 'No encontramos esa nota.' });
+  res.status(204).end();
 }
 
 // GET /api/nutritionist/patients/:id/meals?from=&to=  (máximo 31 días)
@@ -372,10 +437,13 @@ async function listPatientMeals(req, res) {
     select: {
       id: true, name: true, imageUrl: true, loggedAt: true,
       totalCalories: true, totalProteinG: true, totalCarbsG: true, totalFatG: true,
+      nutritionistComment: { select: { id: true } },
     },
     orderBy: { loggedAt: 'desc' },
   });
-  res.json({ meals });
+  res.json({
+    meals: meals.map(({ nutritionistComment, ...m }) => ({ ...m, hasComment: Boolean(nutritionistComment) })),
+  });
 }
 
 // GET /api/nutritionist/patients/:id/meals/:mealId
@@ -390,11 +458,46 @@ async function getPatientMeal(req, res) {
     select: {
       id: true, name: true, imageUrl: true, loggedAt: true, source: true,
       totalCalories: true, totalProteinG: true, totalCarbsG: true, totalFatG: true,
-      ingredients: true, coachFeedback: true,
+      ingredients: true, coachFeedback: true, nutritionistComment: true,
     },
   });
   if (!meal) return res.status(404).json({ error: 'Plato no encontrado.' });
-  res.json({ meal });
+  const { nutritionistComment: c, ...rest } = meal;
+  res.json({ meal: { ...rest, nutritionistComment: c ? publicComment(c) : null } });
+}
+
+const publicComment = (c) => ({ text: c.text, seenAt: c.seenAt, createdAt: c.createdAt, updatedAt: c.updatedAt });
+
+// PUT /api/nutritionist/patients/:id/meals/:mealId/comment  { text }
+// Uno por comida: si ya había, se reemplaza y el paciente vuelve a ver el aviso.
+async function upsertMealComment(req, res) {
+  const profile = await requirePanelAccess(req, res);
+  if (!profile) return;
+  const link = await findPatient(profile, req.params.id, res);
+  if (!link) return;
+  const meal = await prisma.meal.findFirst({ where: { id: req.params.mealId, userId: link.patientId }, select: { id: true } });
+  if (!meal) return res.status(404).json({ error: 'Plato no encontrado.' });
+
+  const text = req.body.text.trim();
+  const comment = await prisma.mealComment.upsert({
+    where: { mealId: meal.id },
+    create: { mealId: meal.id, nutritionistId: profile.id, text },
+    update: { nutritionistId: profile.id, text, seenAt: null },
+  });
+  logger.info(`Nutricionista ${profile.id} comentó la comida ${meal.id}`);
+  res.json({ comment: publicComment(comment) });
+}
+
+// DELETE /api/nutritionist/patients/:id/meals/:mealId/comment
+async function deleteMealComment(req, res) {
+  const profile = await requirePanelAccess(req, res);
+  if (!profile) return;
+  const link = await findPatient(profile, req.params.id, res);
+  if (!link) return;
+  await prisma.mealComment.deleteMany({
+    where: { mealId: req.params.mealId, meal: { userId: link.patientId } },
+  });
+  res.status(204).end();
 }
 
 // PATCH /api/nutritionist/patients/:id/goals
@@ -455,6 +558,11 @@ module.exports = {
   getPatient,
   listPatientMeals,
   getPatientMeal,
+  createNote,
+  updateNote,
+  deleteNote,
+  upsertMealComment,
+  deleteMealComment,
   updatePatientGoals,
   removePatient,
   listMyReviews,
