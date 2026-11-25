@@ -5,6 +5,7 @@ const prisma = require('../config/prisma');
 const SUMMARY_SELECT = {
   id: true, name: true, source: true, loggedAt: true,
   totalCalories: true, totalProteinG: true, totalCarbsG: true, totalFatG: true,
+  nutritionistComment: { select: { id: true, seenAt: true } },
 };
 
 // GET /api/history/meals?from=&to=[&fields=summary]
@@ -24,11 +25,20 @@ async function listMeals(req, res) {
         }
         : {}),
     },
-    ...(summary ? { select: SUMMARY_SELECT } : { include: { ingredients: true, coachFeedback: true } }),
+    ...(summary
+      ? { select: SUMMARY_SELECT }
+      : { include: { ingredients: true, coachFeedback: true, nutritionistComment: { select: { id: true, seenAt: true } } } }),
     orderBy: { loggedAt: 'desc' },
   });
 
-  res.json({ meals });
+  // Ícono de "comentario de tu nutricionista" en el Historial (sin el texto).
+  res.json({
+    meals: meals.map(({ nutritionistComment, ...m }) => ({
+      ...m,
+      hasComment: Boolean(nutritionistComment),
+      commentUnseen: Boolean(nutritionistComment && !nutritionistComment.seenAt),
+    })),
+  });
 }
 
 // GET /api/history/summary
