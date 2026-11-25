@@ -50,9 +50,10 @@ export default function MealResultPage() {
     setRepeating(true);
     setRepeatError(null);
     try {
-      const { data } = await apiClient.post(`/meals/${id}/repeat`, { portions }, { timeout: 60000 });
+      await apiClient.post(`/meals/${id}/repeat`, { portions }, { timeout: 60000 });
       await refreshStreak();
-      navigate(`/meals/${data.meal.id}`, { replace: true });
+      // Igual que al guardar un escaneo: vuelve a Inicio, donde se ve la comida agregada.
+      navigate("/dashboard");
     } catch (err) {
       setRepeatError(err.message);
     } finally {
