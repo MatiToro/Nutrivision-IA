@@ -81,6 +81,8 @@ export default function NutriPatientPage() {
     return { date, ...sum(dayMeals), count: dayMeals.length };
   }), [meals, startKey]);
   const day = days[selectedDay];
+  // Comidas del día elegido en el gráfico (como en el Historial del paciente).
+  const dayMeals = (meals || []).filter((m) => sameDay(new Date(m.loggedAt), day.date));
   const changeWeek = (next) => { setOffset(next); setSelectedDay(6); };
 
   const remove = () => ask({
@@ -195,17 +197,16 @@ export default function NutriPatientPage() {
             </section>
           </div>
 
-          {/* Notas privadas (solo las ve el nutricionista) */}
-          <PatientNotes patientId={id} initialNotes={file.notes} />
-
-          {/* Comidas del período */}
+          {/* Comidas del día elegido en el gráfico de la semana */}
           <section className="card">
-            <SectionHeader title={offset === 0 ? 'Comidas de los últimos 7 días' : 'Comidas de esa semana'} />
-            <p className="hint" style={{ marginTop: 0 }}>Hacé clic en una comida para verla y dejarle un comentario al paciente.</p>
-            {meals === undefined ? null : meals.length === 0 ? (
-              <EmptyState icon={<Utensils size={24} />} title="Sin comidas registradas" text="No registró platos en estos días." />
+            <SectionHeader title={sameDay(day.date, today) ? 'Comidas de hoy' : `Comidas del ${longDate(day.date)}`} />
+            <p className="hint" style={{ marginTop: 0 }}>
+              Hacé clic en un día del gráfico de la semana para ver sus comidas, y en una comida para verla y dejarle un comentario.
+            </p>
+            {meals === undefined ? null : dayMeals.length === 0 ? (
+              <EmptyState icon={<Utensils size={24} />} title="Sin comidas registradas" text="No registró platos ese día." />
             ) : (
-              meals.map((m) => {
+              dayMeals.map((m) => {
                 const d = new Date(m.loggedAt);
                 return (
                   <Link key={m.id} to={`/nutri/pacientes/${id}/comidas/${m.id}`} className="meal-row">
@@ -223,6 +224,9 @@ export default function NutriPatientPage() {
               })
             )}
           </section>
+
+          {/* Notas privadas (solo las ve el nutricionista) */}
+          <PatientNotes patientId={id} initialNotes={file.notes} />
 
           {file.goalChanges.length ? (
             <section className="card">
