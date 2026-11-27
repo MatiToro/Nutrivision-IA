@@ -334,7 +334,8 @@ async function getPatient(req, res) {
   if (!link) return;
   const p = link.patient;
 
-  const [weightLogs, goalChanges, notes] = await Promise.all([
+  // Mismo orden que las consultas de abajo: peso, notas, cambios de metas.
+  const [weightLogs, notes, goalChanges] = await Promise.all([
     prisma.weightLog.findMany({ where: { userId: p.id }, orderBy: { loggedAt: 'asc' }, take: 90 }),
     // Notas privadas del nutricionista (el paciente no las ve).
     prisma.patientNote.findMany({
